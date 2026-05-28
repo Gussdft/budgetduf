@@ -1,5 +1,5 @@
 // Service worker — cache l'app pour un usage hors-ligne
-const CACHE = "budget-foyer-v3";
+const CACHE = "budget-foyer-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,12 +23,10 @@ self.addEventListener("activate", (e) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: "window" }))
-      .then((clients) => clients.forEach((c) => c.navigate(c.url)))
   );
 });
 
-// Stratégie : réseau d'abord, cache en secours (garantit les fichiers frais)
+// Réseau d'abord, cache en secours (garantit les fichiers frais)
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(

@@ -1,18 +1,20 @@
 [build]
   publish = "."
 
+# Ne jamais mettre en cache le service worker
 [[headers]]
   for = "/service-worker.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
+# Ne jamais mettre en cache les fichiers qui changent
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/app.js"
   [headers.values]
     Cache-Control = "no-cache"
 
@@ -20,3 +22,9 @@
   for = "/manifest.json"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Les icônes peuvent être mises en cache longtemps (elles ne changent pas)
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
