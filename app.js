@@ -180,19 +180,19 @@ function App(){
       (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
         el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
         data.deposits.map(d=>{const p=pots.find(x=>x.id===d.potId);return el("div",{key:d.id,style:S.itemRow},
-          el("span",{style:{...S.itemDot,background:p?.color||"#ccc"}}),
-          el("span",{style:S.lineLabel},p?.label||"Supprimée"),
-          el("span",{style:{...S.itemAmount,color:p?.color||"#8a94a6"}},fmt(d.amount)),
+          el("span",{style:{...S.itemDot,background:(p&&p.color)||"#ccc"}}),
+          el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
+          el("span",{style:{...S.itemAmount,color:(p&&p.color)||"#8a94a6"}},fmt(d.amount)),
           el("button",{style:S.delBtn,onClick:()=>delDeposit(d.id)},el(Icon,{name:"trash-2",size:13})));}))),
 
     // ---- TAB GRAPHIQUES ----
     tab==="graphiques" && el(Charts,{months,pots,year,month,mk}),
 
     // Modals
-    modal?.kind==="newpot" && el(PotModal,{onClose:()=>setModal(null),onSave:p=>{addPot(p);setModal(null);}}),
-    modal?.kind==="editpot" && el(PotModal,{initial:modal.pot,onClose:()=>setModal(null),onSave:upd=>{editPot(modal.pot.id,upd);setModal(null);}}),
-    modal?.kind==="deposit" && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
-    modal?.kind==="confirmdel" && el(ConfirmModal,{
+    (modal&&modal.kind==="newpot") && el(PotModal,{onClose:()=>setModal(null),onSave:p=>{addPot(p);setModal(null);}}),
+    (modal&&modal.kind==="editpot") && el(PotModal,{initial:modal.pot,onClose:()=>setModal(null),onSave:upd=>{editPot(modal.pot.id,upd);setModal(null);}}),
+    (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
+    (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:`Supprimer « ${modal.potLabel} » et tous ses versements ?`,
       onClose:()=>setModal(null),
@@ -220,7 +220,7 @@ function Charts({months,pots,year,month,mk}){
     const k=monthKey(d.getFullYear(),d.getMonth());
     const m=months[k];
     last6.push({label:["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"][d.getMonth()],
-      rev:sum(m?.revenus),dep:sum(m?.fixed)+sum(m?.variable)+sum(m?.excep)});
+      rev:sum(m&&m.revenus),dep:sum(m&&m.fixed)+sum(m&&m.variable)+sum(m&&m.excep)});
   }
 
   // Épargne cumulée
@@ -230,7 +230,7 @@ function Charts({months,pots,year,month,mk}){
     const d=new Date(year,month-i,1);
     const k=monthKey(d.getFullYear(),d.getMonth());
     const m=months[k];
-    cumul+=sum(m?.deposits);
+    cumul+=sum(m&&m.deposits);
     savingsCumul.push({label:["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"][d.getMonth()],value:cumul});
   }
 
@@ -335,9 +335,9 @@ function FastBlock({kind,cfg,items,onAmount,onDel,onRename,onAdd}){
 }
 
 function PotModal({initial,onClose,onSave}){
-  const [label,setLabel]=useState(initial?.label||"");
-  const [goal,setGoal]=useState(initial?.goal>0?String(initial.goal):"");
-  const [color,setColor]=useState(initial?.color||POT_PALETTE[0]);
+  const [label,setLabel]=useState((initial&&initial.label)||"");
+  const [goal,setGoal]=useState((initial&&initial.goal>0)?String(initial.goal):"");
+  const [color,setColor]=useState((initial&&initial.color)||POT_PALETTE[0]);
   const submit=()=>{if(!label)return;onSave({label,goal:parseFloat(goal)||0,color});};
   return el(Modal,{title:initial?"Modifier la cagnotte":"Nouvelle cagnotte",onClose},
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Apport maison, Vacances…",style:S.input,onChange:e=>setLabel(e.target.value)})),
