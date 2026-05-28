@@ -123,7 +123,7 @@ function App(){
     // onglets
     el("div",{style:S.tabBar},
       [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["graphiques","bar-chart","Graphiques"]].map(([id,icon,label])=>
-        el("button",{key:id,style:{...S.tabBtn,..( tab===id?S.tabActive:{})},onClick:()=>setTab(id)},
+        el("button",{key:id,style:Object.assign({},S.tabBtn,tab===id?S.tabActive:{}),onClick:()=>setTab(id)},
           el(Icon,{name:icon,size:14,color:tab===id?"#1D8BCE":"#8a94a6"}),
           " "+label))),
 
