@@ -49,7 +49,7 @@ const SECTIONS = {
 };
 const POT_PALETTE = ["#19A979","#1D8BCE","#E8743B","#945ECF","#13A4B4","#C8516C","#F2B53C","#6C8893"];
 
-function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch{return null;} }
+function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
 function saveData(d){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){console.error(e);} }
 
 const blankMonth = () => ({
@@ -101,7 +101,7 @@ function App(){
   const resetMonth=()=>setMonthData(()=>blankMonth());
 
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);}catch{alert("Fichier invalide");}};r.readAsText(f);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);}catch(e){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"#8a94a6"}},"Chargement…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
