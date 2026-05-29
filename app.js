@@ -21,6 +21,9 @@ const PATHS = {
   "bar-chart":'<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
   "edit-2":'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
   "check":'<polyline points="20 6 9 17 4 12"/>',
+  "moon":'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  "sun":'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  "contrast":'<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20Z"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -48,9 +51,14 @@ const SECTIONS = {
   excep:    { title:"Dépenses exceptionnelles", icon:"zap",    accent:"#945ECF", sign:"−" },
 };
 const POT_PALETTE = ["#19A979","#1D8BCE","#E8743B","#945ECF","#13A4B4","#C8516C","#F2B53C","#6C8893"];
+const THEME_KEY = "budget-foyer-theme";
+const THEME_ORDER = ["auto","clair","sombre"];
+const THEME_ATTR = {auto:"auto",clair:"light",sombre:"dark"};
+const THEME_ICON = {auto:"contrast",clair:"sun",sombre:"moon"};
 
 function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
 function saveData(d){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){console.error(e);} }
+function loadTheme(){ try{ return localStorage.getItem(THEME_KEY)||"auto"; }catch(e){ return "auto"; } }
 
 const blankMonth = () => ({
   revenus: PRESET.revenus.map(l=>({id:uid(),label:l,amount:0})),
@@ -71,9 +79,12 @@ function App(){
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
   const [tab,setTab]           = useState("budget");
+  const [theme,setTheme]       = useState(loadTheme());
 
   useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); } setLoaded(true); },[]);
   useEffect(()=>{ if(loaded) saveData({months,pots,projects}); },[months,pots,projects,loaded]);
+  useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
+  const cycleTheme=function(){ setTheme(function(t){ var i=THEME_ORDER.indexOf(t); return THEME_ORDER[(i+1)%THEME_ORDER.length]; }); };
 
   const mk = monthKey(year,month);
   const data = months[mk] || blankMonth();
@@ -110,7 +121,7 @@ function App(){
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
   const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
-  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"#8a94a6"}},"Chargement…");
+  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Chargement…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
 
   return el("div",{style:S.app},
@@ -122,23 +133,20 @@ function App(){
           el("h1",{style:S.title},"Budget du foyer"),
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne"))),
       el("div",{style:{display:"flex",gap:8}},
+        el("button",{style:S.iconBtn,onClick:cycleTheme,title:"Thème : "+theme},el(Icon,{name:THEME_ICON[theme],size:18})),
         el("button",{style:S.iconBtn,onClick:exportJSON,title:"Exporter"},el(Icon,{name:"download",size:18})),
         el("label",{style:{...S.iconBtn,cursor:"pointer"},title:"Importer"},
           el(Icon,{name:"upload",size:18}),
           el("input",{type:"file",accept:"application/json",onChange:importJSON,style:{display:"none"}})))),
-
-    // onglets
-    el("div",{style:S.tabBar},
-      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["graphiques","bar-chart","Graphiques"]].map(([id,icon,label])=>
-        el("button",{key:id,style:Object.assign({},S.tabBtn,tab===id?S.tabActive:{}),onClick:()=>setTab(id)},
-          el(Icon,{name:icon,size:14,color:tab===id?"#1D8BCE":"#8a94a6"}),
-          " "+label))),
 
     // month nav
     el("div",{style:S.monthNav},
       el("button",{style:S.navBtn,onClick:()=>changeMonth(-1)},el(Icon,{name:"chevron-left",size:20})),
       el("span",{style:S.monthLabel},`${MONTHS_FR[month]} ${year}`),
       el("button",{style:S.navBtn,onClick:()=>changeMonth(1)},el(Icon,{name:"chevron-right",size:20}))),
+
+    // ---- panneau d'onglet (clé = tab pour rejouer l'animation) ----
+    el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:14}},
 
     // ---- TAB BUDGET ----
     tab==="budget" && el(React.Fragment,null,
@@ -180,19 +188,19 @@ function App(){
                 el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
                 el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
             el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
-            p.startBalance>0 && el("div",{style:{fontSize:11,color:"#a8b0bf",marginTop:2}},"dont "+fmt(p.startBalance)+" de départ"),
+            p.startBalance>0 && el("div",{style:{fontSize:11,color:"var(--text-4)",marginTop:2}},"dont "+fmt(p.startBalance)+" de départ"),
             pct!==null && el(React.Fragment,null,
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
-              el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"#8a94a6"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
+              el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
             thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
             el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
         })),
         (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
           el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
           data.deposits.map(function(d){var p=pots.find(function(x){return x.id===d.potId;});return el("div",{key:d.id,style:S.itemRow},
-            el("span",{style:{...S.itemDot,background:(p&&p.color)||"#ccc"}}),
+            el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
             el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-            el("span",{style:{...S.itemAmount,color:(p&&p.color)||"#8a94a6"}},fmt(d.amount)),
+            el("span",{style:{...S.itemAmount,color:(p&&p.color)||"var(--text-3)"}},fmt(d.amount)),
             el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));}))),
 
       // Projets
@@ -230,20 +238,30 @@ function App(){
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:proj.color||"#945ECF"}})),
               el("div",{style:S.potFoot},
                 el("span",{style:{color:proj.color||"#945ECF",fontWeight:600}},pct.toFixed(0)+"%"),
-                el("span",{style:{color:"#8a94a6"}},bal>=goal?"Objectif atteint 🎉":"reste "+fmt(remaining)))),
+                el("span",{style:{color:"var(--text-3)"}},bal>=goal?"Objectif atteint 🎉":"reste "+fmt(remaining)))),
             el("div",{style:S.projStats},
               estDate && el("div",{style:S.projStat},
-                el("span",{style:{color:"#8a94a6",fontSize:11}},"Atteint vers"),
+                el("span",{style:{color:"var(--text-3)",fontSize:11}},"Atteint vers"),
                 el("span",{style:{fontWeight:700,fontSize:12}},MONTHS_FR[estDate.getMonth()]+" "+estDate.getFullYear())),
               reqMonthly && el("div",{style:S.projStat},
-                el("span",{style:{color:"#8a94a6",fontSize:11}},"Nécessaire / mois"),
+                el("span",{style:{color:"var(--text-3)",fontSize:11}},"Nécessaire / mois"),
                 el("span",{style:{fontWeight:700,fontSize:12,color:proj.color||"#945ECF"}},fmt(reqMonthly))),
-              (proj.linkedPotIds||[]).length>0 && el("div",{style:{fontSize:11,color:"#8a94a6",marginTop:4}},
+              (proj.linkedPotIds||[]).length>0 && el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:4}},
                 "Cagnottes : "+(proj.linkedPotIds||[]).map(function(id){var p=pots.find(function(x){return x.id===id;});return p?p.label:"?";}).join(", "))));
         })))),
 
     // ---- TAB GRAPHIQUES ----
-    tab==="graphiques" && el(Charts,{months,pots,year,month,mk}),
+    tab==="graphiques" && el(Charts,{months,pots,year,month,mk})
+    ), // fin du panneau d'onglet
+
+    // ---- barre d'onglets en bas (style iOS) ----
+    el("nav",{style:S.tabBar},
+      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["graphiques","bar-chart","Graphiques"]].map(function(t){
+        var id=t[0],icon=t[1],label=t[2];var on=tab===id;
+        return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
+          el(Icon,{name:icon,size:23,color:on?"#1D8BCE":"var(--text-3)"}),
+          el("span",{style:{fontSize:10.5,fontWeight:on?700:500}},label));
+      })),
 
     // Modals
     (modal&&modal.kind==="newpot") && el(PotModal,{onClose:()=>setModal(null),onSave:p=>{addPot(p);setModal(null);}}),
@@ -305,7 +323,7 @@ function Charts({months,pots,year,month,mk}){
 }
 
 function DonutChart({data,total,title}){
-  if(total===0) return el("div",{style:{...S.section,color:"#a8b0bf",fontSize:13,textAlign:"center",padding:24}},title," — pas de données ce mois.");
+  if(total===0) return el("div",{style:{...S.section,color:"var(--text-4)",fontSize:13,textAlign:"center",padding:24}},title," — pas de données ce mois.");
   const cx=90,cy=90,r=64,stroke=20;
   let angle=-Math.PI/2;
   const slices=data.map(d=>{
@@ -325,7 +343,7 @@ function DonutChart({data,total,title}){
       el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
         slices.map((s,i)=>el("div",{key:i,style:{display:"flex",alignItems:"center",gap:8}},
           el("span",{style:{width:10,height:10,borderRadius:3,background:s.color,flexShrink:0}}),
-          el("span",{style:{fontSize:12,color:"#5a6478"}},s.label),
+          el("span",{style:{fontSize:12,color:"var(--text-2)"}},s.label),
           el("span",{style:{fontSize:12,fontWeight:700,color:s.color,marginLeft:"auto"}},s.pct+"%"))))));
 }
 
@@ -347,7 +365,7 @@ function BarChart({data,title}){
         return el("g",{key:i},
           el("rect",{x,y:H-rh,width:barW,height:rh,rx:3,fill:"#19A979",opacity:.85}),
           el("rect",{x:x+barW+gap,y:H-dh,width:barW,height:dh,rx:3,fill:"#E8743B",opacity:.85}),
-          el("text",{x:x+barW,y:H+16,textAnchor:"middle",fontSize:9,fill:"#8a94a6"},d.label));
+          el("text",{x:x+barW,y:H+16,textAnchor:"middle",fontSize:9,fill:"var(--text-3)"},d.label));
       })));
 }
 
@@ -366,7 +384,7 @@ function LineChart({data,title}){
       pts.map((p,i)=>el("g",{key:i},
         el("circle",{cx:p.x,cy:p.y,r:4,fill:"#1D8BCE"}),
         el("text",{x:p.x,y:p.y-8,textAnchor:"middle",fontSize:8.5,fill:"#1D8BCE",fontWeight:600},p.value>0?fmt(p.value).replace(/\s/g,""):""),
-        el("text",{x:p.x,y:H+16,textAnchor:"middle",fontSize:9,fill:"#8a94a6"},p.label)))));
+        el("text",{x:p.x,y:H+16,textAnchor:"middle",fontSize:9,fill:"var(--text-3)"},p.label)))));
 }
 
 // ---- helpers ----
@@ -387,13 +405,13 @@ function FastBlock({kind,cfg,items,onAmount,onDel,onRename,onAdd}){
     el("div",{style:S.lineList}, items.map(it=>el("div",{key:it.id,style:S.lineRow},
       el("span",{style:{...S.lineDot,background:cfg.accent}}),
       el("input",{style:S.lineLabelInput,value:it.label,onChange:e=>onRename(it.id,e.target.value),placeholder:"Libellé"}),
-      el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"#e8ebf0"}},
+      el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
         el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
           onChange:e=>onAmount(it.id,parseFloat(e.target.value)||0),onFocus:e=>e.target.select()}),
         el("span",{style:S.eur},"€")),
       el("button",{style:S.lineDel,onClick:()=>onDel(it.id)},el(Icon,{name:"x",size:15}))))),
     el("div",{style:S.addLineRow},
-      el(Icon,{name:"plus",size:15,color:"#a8b0bf"}),
+      el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
       el("input",{style:S.addLineInput,value:newLabel,placeholder:"Ajouter une ligne…",onChange:e=>setNewLabel(e.target.value),onKeyDown:e=>e.key==="Enter"&&addNew()}),
       newLabel.trim() && el("button",{style:{...S.addLineBtn,color:cfg.accent},onClick:addNew},"Ajouter")));
 }
@@ -408,7 +426,7 @@ function PotModal({initial,onClose,onSave}){
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Vacances, Voiture…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Solde de départ (€) — épargne déjà constituée"),el("input",{type:"number",inputMode:"decimal",value:startBalance,placeholder:"0",style:S.input,onChange:function(e){setStartBalance(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif (€) — optionnel"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"Vide = cagnotte libre",style:S.input,onChange:function(e){setGoal(e.target.value);}})),
-    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid #1a1d29":"2px solid #e8ebf0",cursor:"pointer"}});}))),
+    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid var(--text)":"2px solid var(--border)",cursor:"pointer"}});}))),
     el("button",{style:S.saveBtn,onClick:submit},initial?"Enregistrer":"Créer la cagnotte"));
 }
 
@@ -430,11 +448,11 @@ function ProjectModal({initial,pots,onClose,onSave}){
       el("label",{style:S.fieldLabel},"Cagnottes rattachées"),
       el("div",{style:{display:"flex",flexDirection:"column",gap:6}},pots.map(function(p){
         var checked=linkedPotIds.indexOf(p.id)>=0;
-        return el("label",{key:p.id,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,background:checked?p.color+"18":"#f7f9fc",cursor:"pointer"}},
+        return el("label",{key:p.id,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,background:checked?p.color+"18":"var(--surface-2)",cursor:"pointer"}},
           el("input",{type:"checkbox",checked:checked,onChange:function(){togglePot(p.id);},style:{accentColor:p.color,width:16,height:16}}),
-          el("span",{style:{fontSize:14,fontWeight:checked?700:400,color:checked?p.color:"#5a6478"}},p.label));
+          el("span",{style:{fontSize:14,fontWeight:checked?700:400,color:checked?p.color:"var(--text-2)"}},p.label));
       }))),
-    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid #1a1d29":"2px solid #e8ebf0",cursor:"pointer"}});}))),
+    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid var(--text)":"2px solid var(--border)",cursor:"pointer"}});}))),
     el("button",{style:S.saveBtn,onClick:submit},initial?"Enregistrer":"Créer le projet"));
 }
 
@@ -449,87 +467,89 @@ function DepositModal({pot,maxSuggest,onClose,onSave}){
 
 function ConfirmModal({title,message,onClose,onConfirm}){
   return el(Modal,{title,onClose},
-    el("p",{style:{fontSize:14,color:"#5a6478",marginBottom:20}},message),
+    el("p",{style:{fontSize:14,color:"var(--text-2)",marginBottom:20}},message),
     el("div",{style:{display:"flex",gap:10}},
-      el("button",{style:{...S.saveBtn,background:"#f0f3f8",color:"#5a6478",boxShadow:"none",flex:1},onClick:onClose},"Annuler"),
+      el("button",{style:{...S.saveBtn,background:"var(--surface-3)",color:"var(--text-2)",boxShadow:"none",flex:1},onClick:onClose},"Annuler"),
       el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44",flex:1},onClick:onConfirm},"Supprimer")));
 }
 
 function Modal({title,children,onClose}){
   return el("div",{style:S.overlay,onClick:onClose},
     el("div",{style:S.modal,onClick:e=>e.stopPropagation()},
+      el("div",{style:S.grabber}),
       el("div",{style:S.modalHead},el("h2",{style:S.modalTitle},title),el("button",{style:S.iconBtn,onClick:onClose},el(Icon,{name:"x",size:18}))),
       children));
 }
 
 // ----------------------------------------------------------------------------
 const S = {
-  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"#1a1d29",background:"linear-gradient(180deg,#f5f7fa,#eef1f6)"},
+  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"},
   header:{display:"flex",alignItems:"center",justifyContent:"space-between"},
   logo:{width:42,height:42,borderRadius:13,background:"linear-gradient(135deg,#1D8BCE,#19A979)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(29,139,206,.35)"},
-  title:{margin:0,fontSize:20,fontWeight:800,letterSpacing:"-0.5px"},
-  subtitle:{margin:0,fontSize:12,color:"#8a94a6"},
-  iconBtn:{width:38,height:38,borderRadius:10,border:"none",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#5a6478",boxShadow:"0 1px 4px rgba(0,0,0,.06)"},
-  tabBar:{display:"flex",background:"#fff",borderRadius:14,padding:4,gap:4,boxShadow:"0 1px 4px rgba(0,0,0,.05)"},
-  tabBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"none",background:"transparent",fontSize:13,fontWeight:600,cursor:"pointer",padding:"8px 6px",borderRadius:10,color:"#8a94a6",transition:"all .15s"},
-  tabActive:{background:"#EBF5FF",color:"#1D8BCE"},
-  monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"#fff",borderRadius:14,padding:8,boxShadow:"0 1px 4px rgba(0,0,0,.05)"},
-  navBtn:{width:34,height:34,borderRadius:9,border:"none",background:"#f0f3f8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#5a6478"},
+  title:{margin:0,fontSize:26,fontWeight:800,letterSpacing:"-0.6px"},
+  subtitle:{margin:0,fontSize:12,color:"var(--text-3)"},
+  iconBtn:{width:38,height:38,borderRadius:10,border:"none",background:"var(--surface)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text-2)",boxShadow:"var(--shadow)"},
+  tabBar:{position:"fixed",left:0,right:0,bottom:0,zIndex:90,display:"flex",justifyContent:"space-around",background:"var(--tabbar-bg)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)",borderTop:"0.5px solid var(--tabbar-border)",padding:"8px 8px calc(8px + env(safe-area-inset-bottom))"},
+  tabBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,border:"none",background:"transparent",cursor:"pointer",padding:"4px 0",color:"var(--text-3)",maxWidth:120},
+  tabActive:{color:"#1D8BCE"},
+  monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"var(--surface)",borderRadius:14,padding:8,boxShadow:"var(--shadow)"},
+  navBtn:{width:34,height:34,borderRadius:9,border:"none",background:"var(--surface-3)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-2)"},
   monthLabel:{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center"},
-  flowCard:{background:"#fff",borderRadius:18,padding:18,boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .4s ease"},
+  flowCard:{background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"},
   flowRow:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"},
-  flowLabel:{display:"flex",alignItems:"center",gap:8,fontSize:14,color:"#5a6478",fontWeight:500},
+  flowLabel:{display:"flex",alignItems:"center",gap:8,fontSize:14,color:"var(--text-2)",fontWeight:500},
   flowVal:{fontSize:16,fontWeight:700},
-  flowDivider:{height:1,background:"#eef1f6",margin:"10px 0 14px"},
-  resteBox:{borderRadius:15,padding:"16px 18px",color:"#fff",animation:"pop .3s ease"},
+  flowDivider:{height:1,background:"var(--border-2)",margin:"10px 0 14px"},
+  resteBox:{borderRadius:16,padding:"16px 18px",color:"#fff",animation:"pop .3s ease"},
   resteLabel:{display:"flex",alignItems:"center",gap:7,fontSize:13,fontWeight:600,opacity:.95},
   resteVal:{fontSize:32,fontWeight:800,marginTop:3,letterSpacing:"-1px"},
   resteFoot:{fontSize:12,marginTop:5,opacity:.92},
   actionRow:{display:"flex",gap:10},
-  copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"none",background:"#fff",color:"#5a6478",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:11,boxShadow:"0 1px 4px rgba(0,0,0,.05)"},
-  resetBtn:{border:"none",background:"transparent",color:"#a8b0bf",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px 14px"},
-  section:{background:"#fff",borderRadius:16,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,.05)"},
+  copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"none",background:"var(--surface)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:12,boxShadow:"var(--shadow)"},
+  resetBtn:{border:"none",background:"transparent",color:"var(--text-4)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px 14px"},
+  section:{background:"var(--surface)",borderRadius:18,padding:16,boxShadow:"var(--shadow-card)"},
   sectionHead:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10},
   sectionTitle:{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:700},
   badge:{fontSize:13,fontWeight:800,padding:"4px 11px",borderRadius:20},
-  blockHint:{fontSize:12.5,color:"#a8b0bf",margin:"0 0 8px"},
+  blockHint:{fontSize:12.5,color:"var(--text-4)",margin:"0 0 8px"},
   lineList:{display:"flex",flexDirection:"column"},
   lineRow:{display:"flex",alignItems:"center",gap:9,padding:"5px 0"},
   lineDot:{width:8,height:8,borderRadius:"50%",flexShrink:0},
-  lineLabelInput:{flex:1,minWidth:0,border:"none",background:"transparent",fontSize:14,fontWeight:500,color:"#1a1d29",outline:"none",padding:"6px 2px"},
-  lineAmtWrap:{display:"flex",alignItems:"center",background:"#fbfcfe",borderRadius:9,border:"1.5px solid #e8ebf0",padding:"0 9px",width:104,transition:"border-color .2s"},
-  lineAmtInput:{width:"100%",border:"none",outline:"none",padding:"8px 0",fontSize:15,fontWeight:700,textAlign:"right",background:"transparent",color:"#1a1d29"},
-  eur:{fontSize:13,color:"#8a94a6",marginLeft:3},
-  lineDel:{border:"none",background:"transparent",color:"#d0d5dd",cursor:"pointer",padding:3,display:"flex",flexShrink:0},
-  addLineRow:{display:"flex",alignItems:"center",gap:8,marginTop:6,paddingTop:10,borderTop:"1px dashed #eef1f6"},
-  addLineInput:{flex:1,border:"none",background:"transparent",fontSize:13.5,color:"#5a6478",outline:"none",padding:"6px 0"},
+  lineLabelInput:{flex:1,minWidth:0,border:"none",background:"transparent",fontSize:14,fontWeight:500,color:"var(--text)",outline:"none",padding:"6px 2px"},
+  lineAmtWrap:{display:"flex",alignItems:"center",background:"var(--field-bg)",borderRadius:9,border:"1.5px solid var(--border)",padding:"0 9px",width:104,transition:"border-color .2s"},
+  lineAmtInput:{width:"100%",border:"none",outline:"none",padding:"8px 0",fontSize:15,fontWeight:700,textAlign:"right",background:"transparent",color:"var(--text)"},
+  eur:{fontSize:13,color:"var(--text-3)",marginLeft:3},
+  lineDel:{border:"none",background:"transparent",color:"var(--del)",cursor:"pointer",padding:3,display:"flex",flexShrink:0},
+  addLineRow:{display:"flex",alignItems:"center",gap:8,marginTop:6,paddingTop:10,borderTop:"1px dashed var(--border-2)"},
+  addLineInput:{flex:1,border:"none",background:"transparent",fontSize:13.5,color:"var(--text-2)",outline:"none",padding:"6px 0"},
   addLineBtn:{border:"none",background:"transparent",fontSize:13,fontWeight:700,cursor:"pointer"},
   potList:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12},
-  potCard:{background:"#f7f9fc",borderRadius:14,padding:14},
+  potCard:{background:"var(--surface-2)",borderRadius:16,padding:14},
   potTop:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6},
   potBalRow:{display:"flex",alignItems:"baseline",gap:6},
-  potGoalTxt:{fontSize:13,color:"#8a94a6",fontWeight:500},
-  potBarTrack:{height:7,background:"#e2e6ee",borderRadius:5,overflow:"hidden",marginTop:10},
+  potGoalTxt:{fontSize:13,color:"var(--text-3)",fontWeight:500},
+  potBarTrack:{height:7,background:"var(--track)",borderRadius:5,overflow:"hidden",marginTop:10},
   potBarFill:{height:"100%",borderRadius:5,transition:"width .4s ease"},
   potFoot:{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6},
   potMonthTag:{fontSize:11.5,color:"#19A979",fontWeight:600,marginTop:8},
-  projCard:{background:"#f7f9fc",borderRadius:16,padding:16,border:"1.5px solid #e8ebf0"},
+  projCard:{background:"var(--surface-2)",borderRadius:18,padding:16,border:"1.5px solid var(--border)"},
   projStats:{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"},
-  projStat:{display:"flex",flexDirection:"column",gap:2,background:"#fff",borderRadius:9,padding:"8px 12px",flex:1},
-  depositBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:5,width:"100%",marginTop:10,padding:"9px",borderRadius:10,border:"1.5px solid",background:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"},
-  depHead:{fontSize:12,fontWeight:700,color:"#8a94a6",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6},
-  itemRow:{display:"flex",alignItems:"center",gap:11,padding:"10px 4px",borderBottom:"1px solid #f4f6fa"},
+  projStat:{display:"flex",flexDirection:"column",gap:2,background:"var(--surface)",borderRadius:10,padding:"8px 12px",flex:1},
+  depositBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:5,width:"100%",marginTop:10,padding:"9px",borderRadius:11,border:"1.5px solid",background:"var(--surface)",fontSize:13,fontWeight:600,cursor:"pointer"},
+  depHead:{fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6},
+  itemRow:{display:"flex",alignItems:"center",gap:11,padding:"10px 4px",borderBottom:"1px solid var(--border-2)"},
   itemDot:{width:9,height:9,borderRadius:"50%",flexShrink:0},
   lineLabel:{flex:1,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},
   itemAmount:{fontSize:14.5,fontWeight:700,whiteSpace:"nowrap"},
-  delBtn:{border:"none",background:"transparent",color:"#c0c6d0",cursor:"pointer",padding:4,display:"flex"},
-  overlay:{position:"fixed",inset:0,background:"rgba(20,24,38,.45)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100,animation:"fadeIn .2s ease"},
-  modal:{background:"#fff",borderRadius:"22px 22px 0 0",padding:22,width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",animation:"slideUp .3s ease"},
+  delBtn:{border:"none",background:"transparent",color:"var(--del)",cursor:"pointer",padding:4,display:"flex"},
+  overlay:{position:"fixed",inset:0,background:"var(--overlay)",WebkitBackdropFilter:"blur(3px)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100,animation:"fadeIn .2s ease"},
+  modal:{background:"var(--surface)",borderRadius:"24px 24px 0 0",padding:"12px 22px calc(22px + env(safe-area-inset-bottom))",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",animation:"slideUp .3s cubic-bezier(.22,.61,.36,1)"},
+  grabber:{width:38,height:5,borderRadius:3,background:"var(--border-3)",margin:"0 auto 14px"},
   modalHead:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18},
   modalTitle:{margin:0,fontSize:18,fontWeight:800},
-  fieldLabel:{display:"block",fontSize:12.5,fontWeight:600,color:"#5a6478",marginBottom:6},
-  input:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid #e2e6ee",fontSize:15,outline:"none",background:"#fbfcfe",boxSizing:"border-box"},
-  suggestBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed #c8d0dd",background:"#f7f9fc",color:"#5a6478",fontSize:13,fontWeight:600,cursor:"pointer"},
+  fieldLabel:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6},
+  input:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},
+  suggestBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border-3)",background:"var(--surface-2)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer"},
   saveBtn:{width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)"},
   smallBtn:{display:"flex",alignItems:"center",gap:4,border:"none",borderRadius:9,padding:"6px 12px",fontSize:13,fontWeight:600,cursor:"pointer"},
 };

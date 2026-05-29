@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#1D8BCE" />
+  <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Budget" />
@@ -11,20 +12,60 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <title>Budget du foyer</title>
   <style>
+    /* ----- Thème clair (variables par défaut) ----- */
+    :root{
+      --bg-top:#f5f7fa; --bg-bottom:#eef1f6;
+      --surface:#ffffff; --surface-2:#f7f9fc; --surface-3:#f0f3f8;
+      --text:#1a1d29; --text-2:#5a6478; --text-3:#8a94a6; --text-4:#a8b0bf;
+      --border:#e8ebf0; --border-2:#eef1f6; --border-3:#e2e6ee;
+      --shadow:0 1px 4px rgba(0,0,0,.05); --shadow-card:0 1px 4px rgba(0,0,0,.05);
+      --field-bg:#fbfcfe; --track:#e2e6ee;
+      --tabbar-bg:rgba(255,255,255,.78); --tabbar-border:rgba(0,0,0,.07);
+      --overlay:rgba(20,24,38,.45); --del:#c0c6d0;
+    }
+    /* ----- Thème sombre (palette iOS) ----- */
+    html[data-theme="dark"]{
+      --bg-top:#000000; --bg-bottom:#0a0a0c;
+      --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
+      --text:#f2f2f7; --text-2:#aeaeb2; --text-3:#8e8e93; --text-4:#6e6e73;
+      --border:#38383a; --border-2:#2c2c2e; --border-3:#48484a;
+      --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 1px 3px rgba(0,0,0,.4);
+      --field-bg:#2c2c2e; --track:#3a3a3c;
+      --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
+      --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
+    }
+    /* ----- Mode auto : suit le réglage système ----- */
+    @media (prefers-color-scheme: dark){
+      html[data-theme="auto"]{
+        --bg-top:#000000; --bg-bottom:#0a0a0c;
+        --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
+        --text:#f2f2f7; --text-2:#aeaeb2; --text-3:#8e8e93; --text-4:#6e6e73;
+        --border:#38383a; --border-2:#2c2c2e; --border-3:#48484a;
+        --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 1px 3px rgba(0,0,0,.4);
+        --field-bg:#2c2c2e; --track:#3a3a3c;
+        --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
+        --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
+      }
+    }
     *{box-sizing:border-box;}
-    html,body{margin:0;padding:0;background:#eef1f6;}
-    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
-    input,button{font-family:inherit;}
+    html,body{margin:0;padding:0;background:var(--bg-bottom);}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;color:var(--text);
+      transition:background .3s ease;}
+    input,button{font-family:inherit;color:var(--text);}
     input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-    ::-webkit-scrollbar{width:8px;}::-webkit-scrollbar-thumb{background:#d0d5dd;border-radius:4px;}
-    @keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+    ::-webkit-scrollbar{width:8px;}::-webkit-scrollbar-thumb{background:var(--border-3);border-radius:4px;}
+    button{-webkit-tap-highlight-color:transparent;transition:transform .12s ease,background .2s ease,color .2s ease;}
+    button:active{transform:scale(.95);}
+    @keyframes slideUp{from{transform:translateY(24px);opacity:0;}to{transform:translateY(0);opacity:1;}}
     @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
     @keyframes pop{0%{transform:scale(.96);}100%{transform:scale(1);}}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+    .tab-panel{animation:fadeSlide .28s cubic-bezier(.22,.61,.36,1);}
     /* bandeau d'installation */
-    #install-banner{position:fixed;left:12px;right:12px;bottom:12px;z-index:200;background:#1a1d29;color:#fff;
-      border-radius:14px;padding:13px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;
+    #install-banner{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:200;background:#1c1c1e;color:#fff;
+      border-radius:16px;padding:13px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;
       box-shadow:0 8px 24px rgba(0,0,0,.3);animation:slideUp .3s ease;}
-    #install-banner button{border:none;border-radius:9px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
+    #install-banner button{border:none;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
     #install-yes{background:linear-gradient(135deg,#1D8BCE,#19A979);color:#fff;}
     #install-no{background:transparent;color:#8a94a6;}
   </style>
