@@ -1,6 +1,11 @@
 const { useState, useEffect, useRef } = React;
 const el = React.createElement;
 
+// ---- Supabase ----
+const SUPABASE_URL = "https://slcmmbqdtsmvwhqdxzyu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsY21tYnFkdHNtdndocWR4enl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjcxNjMsImV4cCI6MjA4OTAwMzE2M30.X77k4KhtUo85HJKPrGOREswfKfdVQwdQ-rOYtHm_WIw";
+const db = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
 // ----- icônes SVG inline -----
 const PATHS = {
   "piggy-bank":'<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h0"/>',
@@ -26,6 +31,8 @@ const PATHS = {
   "contrast":'<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20Z"/>',
   "clock":'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   "wallet":'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2Z"/>',
+  "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+  "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -123,6 +130,138 @@ const blankMonth = () => ({
 });
 
 // ----------------------------------------------------------------------------
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("login");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = function() {
+    if (!email || !password) { setMsg("Email et mot de passe requis."); return; }
+    setLoading(true); setMsg("");
+    var p = mode === "login"
+      ? db.auth.signInWithPassword({email: email, password: password})
+      : db.auth.signUp({email: email, password: password});
+    p.then(function(res) {
+      setLoading(false);
+      if (res.error) { setMsg(res.error.message); }
+      else if (mode === "signup") { setMsg("Vérifie ton email pour confirmer, puis connecte-toi."); setMode("login"); }
+    });
+  };
+
+  return el("div", {style:{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"24px 20px",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"}},
+    el("div", {style:{maxWidth:400,margin:"0 auto",width:"100%"}},
+      el("div", {style:{display:"flex",justifyContent:"center",marginBottom:32}},
+        el("div", {style:{width:72,height:72,borderRadius:22,background:"linear-gradient(135deg,#1D8BCE,#19A979)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(29,139,206,.4)"}},
+          el(Icon,{name:"piggy-bank",size:36,color:"#fff"}))),
+      el("h1",{style:{textAlign:"center",fontSize:26,fontWeight:800,letterSpacing:"-0.5px",margin:"0 0 6px",color:"var(--text)"}},"Budget du foyer"),
+      el("p",{style:{textAlign:"center",fontSize:13.5,color:"var(--text-3)",margin:"0 0 32px"}},"Gérez votre budget à deux, en temps réel"),
+      el("div",{style:{background:"var(--surface)",borderRadius:20,padding:22,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}},
+        el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:12,padding:3,marginBottom:20}},
+          ["login","signup"].map(function(m){
+            var on=mode===m;
+            return el("button",{key:m,onClick:function(){setMode(m);setMsg("");},
+              style:{flex:1,padding:"9px 0",borderRadius:10,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer",boxShadow:on?"0 1px 4px rgba(0,0,0,.08)":"none"}},
+              m==="login"?"Connexion":"Créer un compte");
+          })),
+        el("div",{style:{marginBottom:14}},
+          el("label",{style:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6}},"Email"),
+          el("input",{type:"email",inputMode:"email",value:email,style:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},placeholder:"exemple@gmail.com",
+            onChange:function(e){setEmail(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+        el("div",{style:{marginBottom:20}},
+          el("label",{style:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6}},"Mot de passe"),
+          el("input",{type:"password",value:password,style:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},placeholder:"••••••••",
+            onChange:function(e){setPassword(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+        msg&&el("p",{style:{fontSize:13,color:msg.indexOf("Vérifie")>=0?"#19A979":"#C8516C",margin:"-8px 0 14px",textAlign:"center"}},msg),
+        el("button",{style:{width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)",opacity:loading?0.6:1},onClick:submit},
+          loading?"…":(mode==="login"?"Se connecter":"Créer mon compte")))));
+}
+
+function HouseholdScreen({onDone}) {
+  const [mode, setMode] = useState("choice");
+  const [name, setName] = useState("Mon foyer");
+  const [code, setCode] = useState("");
+  const [created, setCreated] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+  var btnStyle = {width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)"};
+  var backStyle = {width:"100%",padding:14,borderRadius:13,border:"none",background:"var(--surface-3)",color:"var(--text-2)",fontSize:15,fontWeight:700,cursor:"pointer"};
+  var wrap = {minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"24px 20px",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"};
+  var card = {maxWidth:400,margin:"0 auto",width:"100%",background:"var(--surface)",borderRadius:20,padding:22,boxShadow:"0 1px 4px rgba(0,0,0,.05)"};
+  var lbl = {display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6};
+  var inp = {width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"};
+
+  const create = function() {
+    setLoading(true); setMsg("");
+    db.rpc("create_household",{household_name:name}).then(function(res){
+      setLoading(false);
+      if(res.error){setMsg(res.error.message);}
+      else{setCreated({householdId:res.data.id,inviteCode:res.data.invite_code});}
+    });
+  };
+  const join = function() {
+    setLoading(true); setMsg("");
+    db.rpc("join_household_by_code",{code:code.trim().toUpperCase()}).then(function(res){
+      setLoading(false);
+      if(res.error){setMsg("Code invalide. Vérifie et réessaie.");}
+      else{onDone(res.data.id);}
+    });
+  };
+
+  if(created) return el("div",{style:wrap},
+    el("div",{style:card},
+      el("div",{style:{textAlign:"center",marginBottom:20}},
+        el("div",{style:{fontSize:44,marginBottom:8}},"🎉"),
+        el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Foyer créé !"),
+        el("p",{style:{fontSize:13.5,color:"var(--text-2)",margin:"8px 0 0"}},"Partage ce code avec ta conjointe")),
+      el("div",{style:{background:"linear-gradient(135deg,#1D8BCE14,#19A97914)",borderRadius:16,padding:"20px 24px",textAlign:"center",marginBottom:20}},
+        el("div",{style:{fontSize:11,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}},"Code d'invitation"),
+        el("div",{style:{fontSize:36,fontWeight:900,letterSpacing:"6px",color:"#1D8BCE",fontFamily:"monospace"}},created.inviteCode),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:8}},"Valide indéfiniment · partage-le à ta conjointe")),
+      el("button",{style:btnStyle,onClick:function(){onDone(created.householdId);}},
+        "Commencer »")));
+
+  if(mode==="choice") return el("div",{style:wrap},
+    el("div",{style:{maxWidth:400,margin:"0 auto",width:"100%"}},
+      el("div",{style:{textAlign:"center",marginBottom:32}},
+        el("div",{style:{fontSize:44,marginBottom:12}},"🏠"),
+        el("h2",{style:{margin:0,fontSize:22,fontWeight:800,color:"var(--text)"}},"Ton foyer"),
+        el("p",{style:{fontSize:13.5,color:"var(--text-3)",margin:"8px 0 0"}},"Crée un foyer ou rejoins celui de ton partenaire")),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+        el("button",{style:{background:"var(--surface)",borderRadius:18,padding:20,cursor:"pointer",border:"1.5px solid #1D8BCE30",textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,.05)"},onClick:function(){setMode("create");}},
+          el("div",{style:{fontSize:18,marginBottom:4}},"✨ Créer un foyer"),
+          el("div",{style:{fontSize:13,color:"var(--text-3)"}},"Tu génères un code d'invitation pour ton partenaire")),
+        el("button",{style:{background:"var(--surface)",borderRadius:18,padding:20,cursor:"pointer",border:"1.5px solid #19A97930",textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,.05)"},onClick:function(){setMode("join");}},
+          el("div",{style:{fontSize:18,marginBottom:4}},"🔗 Rejoindre un foyer"),
+          el("div",{style:{fontSize:13,color:"var(--text-3)"}},"Entre le code partagé par ton partenaire")))));
+
+  if(mode==="create") return el("div",{style:wrap},
+    el("div",{style:card},
+      el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Créer un foyer"),
+      el("div",{style:{marginBottom:20}},
+        el("label",{style:lbl},"Nom du foyer"),
+        el("input",{value:name,style:inp,placeholder:"ex : Foyer Dupont",autoFocus:true,
+          onChange:function(e){setName(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")create();}})),
+      msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
+      el("div",{style:{display:"flex",gap:10}},
+        el("button",{style:{...backStyle,flex:1},onClick:function(){setMode("choice");}},"Retour"),
+        el("button",{style:{...btnStyle,flex:1,opacity:loading?0.6:1},onClick:create},loading?"…":"Créer"))));
+
+  return el("div",{style:wrap},
+    el("div",{style:card},
+      el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Rejoindre un foyer"),
+      el("div",{style:{marginBottom:20}},
+        el("label",{style:lbl},"Code d'invitation (6 lettres)"),
+        el("input",{value:code,style:{...inp,textTransform:"uppercase",letterSpacing:"4px",fontSize:22,fontWeight:700,textAlign:"center",fontFamily:"monospace"},placeholder:"XXXXXX",maxLength:6,autoFocus:true,
+          onChange:function(e){setCode(e.target.value.toUpperCase());},onKeyDown:function(e){if(e.key==="Enter")join();}})),
+      msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
+      el("div",{style:{display:"flex",gap:10}},
+        el("button",{style:{...backStyle,flex:1},onClick:function(){setMode("choice");}},"Retour"),
+        el("button",{style:{...btnStyle,background:"linear-gradient(135deg,#19A979,#13A4B4)",flex:1,opacity:(loading||code.length<6)?0.6:1},onClick:join},loading?"…":"Rejoindre"))));
+}
+
+// ----------------------------------------------------------------------------
 function App(){
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
@@ -137,10 +276,85 @@ function App(){
   const [annualReturn,setAnnualReturn] = useState(3);
   const [advisorMode,setAdvisorMode]   = useState(true);
   const [profile,setProfile]           = useState(DEFAULT_PROFILE);
+  const [user, setUser] = useState(null);
+  const [householdId, setHouseholdId] = useState(null);
+  const [authReady, setAuthReady] = useState(!db);
+  const [householdCode, setHouseholdCode] = useState("");
+  const syncTimer = useRef(null);
+  const lastSyncRef = useRef(0);
+  const syncingRef = useRef(false);
 
   useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); },[]);
-  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn,advisorMode,profile}}); },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
+  useEffect(function(){
+    if(!loaded) return;
+    var payload={months:months,pots:pots,projects:projects,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    saveData(payload);
+    if(!householdId||!db||syncingRef.current) return;
+    if(syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current=setTimeout(function(){
+      lastSyncRef.current=Date.now();
+      db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
+    },1500);
+  },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
+  useEffect(function(){
+    if(!db) return;
+    db.auth.getSession().then(function(res){
+      var sess=res.data&&res.data.session;
+      if(sess&&sess.user){
+        setUser(sess.user);
+        db.from("user_households").select("household_id, households(invite_code)")
+          .eq("user_id",sess.user.id).single().then(function(hr){
+            if(hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
+            setAuthReady(true);
+          });
+      } else { setAuthReady(true); }
+    });
+    var sub=db.auth.onAuthStateChange(function(event,sess){
+      if(event==="SIGNED_OUT"){setUser(null);setHouseholdId(null);setHouseholdCode("");setLoaded(false);}
+    });
+    return function(){if(sub.data&&sub.data.subscription)sub.data.subscription.unsubscribe();};
+  },[]);
+  useEffect(function(){
+    if(!householdId||!db) return;
+    syncingRef.current=true;
+    db.from("budget_data").select("data").eq("household_id",householdId).single().then(function(res){
+      if(res.data&&res.data.data){
+        var d=res.data.data;
+        if(d.months)setMonths(d.months);
+        if(d.pots)setPots(d.pots);
+        if(d.projects)setProjects(d.projects);
+        if(d.settings){
+          if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
+          if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+        }
+      }
+      syncingRef.current=false;
+      setLoaded(true);
+    });
+  },[householdId]);
+  useEffect(function(){
+    if(!householdId||!db) return;
+    var ch=db.channel("budget:"+householdId)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"budget_data",filter:"household_id=eq."+householdId},function(payload){
+        if(Date.now()-lastSyncRef.current<3000) return;
+        var d=payload.new&&payload.new.data;
+        if(!d) return;
+        syncingRef.current=true;
+        if(d.months)setMonths(d.months);
+        if(d.pots)setPots(d.pots);
+        if(d.projects)setProjects(d.projects);
+        if(d.settings){
+          if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
+          if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+        }
+        setTimeout(function(){syncingRef.current=false;},500);
+      })
+      .subscribe();
+    return function(){db.removeChannel(ch);};
+  },[householdId]);
   const cycleTheme=function(){ setTheme(function(t){ var i=THEME_ORDER.indexOf(t); return THEME_ORDER[(i+1)%THEME_ORDER.length]; }); };
 
   const mk = monthKey(year,month);
@@ -182,7 +396,10 @@ function App(){
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
   const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
-  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Chargement…");
+  if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
+  if(authReady&&!user&&db) return el(LoginScreen,null);
+  if(authReady&&user&&!householdId&&db) return el(HouseholdScreen,{onDone:function(id){setHouseholdId(id);}});
+  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Synchronisation…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
 
   return el("div",{style:S.app},
@@ -194,6 +411,11 @@ function App(){
           el("h1",{style:S.title},"Budget du foyer"),
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne"))),
       el("div",{style:{display:"flex",gap:8}},
+        user&&householdCode&&el("button",{style:{...S.iconBtn,fontSize:10,fontWeight:800,letterSpacing:"1px",width:"auto",padding:"0 10px",fontFamily:"monospace",color:"#1D8BCE"},
+          title:"Code d'invitation foyer — cliquer pour copier",
+          onClick:function(){try{navigator.clipboard.writeText(householdCode);}catch(e){}}},
+          householdCode),
+        user&&db&&el("button",{style:{...S.iconBtn,color:"#C8516C"},onClick:function(){db.auth.signOut();},title:"Se déconnecter"},el(Icon,{name:"log-out",size:18})),
         el("button",{style:S.iconBtn,onClick:cycleTheme,title:"Thème : "+theme},el(Icon,{name:THEME_ICON[theme],size:18})),
         el("button",{style:S.iconBtn,onClick:exportJSON,title:"Exporter"},el(Icon,{name:"download",size:18})),
         el("label",{style:{...S.iconBtn,cursor:"pointer"},title:"Importer"},
