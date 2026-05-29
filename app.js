@@ -24,6 +24,8 @@ const PATHS = {
   "moon":'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   "sun":'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   "contrast":'<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20Z"/>',
+  "clock":'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  "wallet":'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2Z"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -113,7 +115,9 @@ function App(){
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
+  const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
   const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
+  const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
   const copyPrev=()=>{const d=new Date(year,month-1,1);const pk=monthKey(d.getFullYear(),d.getMonth());const prev=months[pk];if(!prev)return;
     setMonthData(()=>({revenus:prev.revenus.map(x=>({...x,id:uid()})),fixed:prev.fixed.map(x=>({...x,id:uid()})),variable:prev.variable.map(x=>({...x,id:uid()})),excep:prev.excep.map(x=>({...x,id:uid(),amount:0})),deposits:[]}));};
   const resetMonth=()=>setMonthData(()=>blankMonth());
@@ -160,7 +164,9 @@ function App(){
         el("div",{style:{...S.resteBox,background:`linear-gradient(135deg,${restColor},${restColor}cc)`}},
           el("div",{style:S.resteLabel},el(Icon,{name:"piggy-bank",size:16,color:"#fff"})," ",nonAffecte>=0?"Non affecté":"Découvert prévu"),
           el("div",{style:S.resteVal},fmt(nonAffecte)),
-          el("div",{style:S.resteFoot},`Disponible avant épargne : ${fmt(reste)}`))),
+          el("div",{style:S.resteFoot},`Disponible avant épargne : ${fmt(reste)}`),
+          (nonAffecte>0 && pots.length>0) && el("button",{style:S.allocateBtn,onClick:()=>setModal({kind:"allocate"})},
+            el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes"))),
 
       el("div",{style:S.actionRow},
         el("button",{style:S.copyBtn,onClick:copyPrev},el(Icon,{name:"rotate-ccw",size:14})," Recopier le mois précédent"),
@@ -185,6 +191,7 @@ function App(){
             el("div",{style:S.potTop},
               el("span",{style:{display:"flex",alignItems:"center",gap:9}},el(Icon,{name:"piggy-bank",size:16,color:p.color}),el("strong",{style:{fontSize:14}},p.label)),
               el("div",{style:{display:"flex",gap:4}},
+                el("button",{style:S.delBtn,title:"Historique",onClick:function(){setModal({kind:"history",pot:p});}},el(Icon,{name:"clock",size:13})),
                 el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
                 el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
             el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
@@ -267,6 +274,8 @@ function App(){
     (modal&&modal.kind==="newpot") && el(PotModal,{onClose:()=>setModal(null),onSave:p=>{addPot(p);setModal(null);}}),
     (modal&&modal.kind==="editpot") && el(PotModal,{initial:modal.pot,onClose:()=>setModal(null),onSave:upd=>{editPot(modal.pot.id,upd);setModal(null);}}),
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
+    (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
+    (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,history:potHistory(modal.pot.id),total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -465,6 +474,50 @@ function DepositModal({pot,maxSuggest,onClose,onSave}){
     el("button",{style:{...S.saveBtn,background:`linear-gradient(135deg,${pot.color},${pot.color}cc)`,boxShadow:`0 4px 14px ${pot.color}55`},onClick:submit},"Verser"));
 }
 
+function AllocateModal({pots,available,onClose,onSave}){
+  const [amounts,setAmounts]=useState({});
+  const set=function(id,v){setAmounts(function(prev){var n=Object.assign({},prev);n[id]=v;return n;});};
+  const allocated=pots.reduce(function(s,p){return s+(parseFloat(amounts[p.id])||0);},0);
+  const left=available-allocated;
+  const submit=function(){if(left<-0.001)return;var entries=pots.map(function(p){return {potId:p.id,amount:parseFloat(amounts[p.id])||0};});onSave(entries);};
+  return el(Modal,{title:"Répartir le non-affecté",onClose},
+    el("p",{style:{fontSize:13,color:"var(--text-2)",margin:"0 0 14px"}},
+      "Tu as "+fmt(available)+" non affecté ce mois. Répartis ce que tu veux dans tes cagnottes — ce qui reste demeure sur le compte courant (ton matelas)."),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:16}},pots.map(function(p){
+      return el("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:11,background:"var(--surface-2)"}},
+        el("span",{style:{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}),
+        el("span",{style:{flex:1,fontSize:14,fontWeight:600}},p.label),
+        el("div",{style:{...S.lineAmtWrap,width:110}},
+          el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,placeholder:"0",value:amounts[p.id]||"",
+            onChange:function(e){set(p.id,e.target.value);},onFocus:function(e){e.target.select();}}),
+          el("span",{style:S.eur},"€")));
+    })),
+    el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,padding:"10px 2px",marginBottom:14,borderTop:"1px dashed var(--border-2)"}},
+      el("span",{style:{color:"var(--text-2)"}},el(Icon,{name:"wallet",size:14})," Laissé sur le compte"),
+      el("span",{style:{color:left<0?"#C8516C":"#19A979"}},fmt(left))),
+    left<-0.001 && el("p",{style:{fontSize:12,color:"#C8516C",margin:"0 0 12px"}},"Tu répartis plus que le non-affecté disponible."),
+    el("button",{style:{...S.saveBtn,opacity:(allocated<=0||left<-0.001)?.5:1},onClick:submit},"Verser "+fmt(allocated)));
+}
+
+function HistoryModal({pot,history,total,onClose}){
+  return el(Modal,{title:"Historique — "+pot.label,onClose},
+    pot.startBalance>0 && el("div",{style:{...S.itemRow,borderBottom:"1px dashed var(--border-2)"}},
+      el("span",{style:{...S.itemDot,background:pot.color}}),
+      el("span",{style:S.lineLabel},"Solde de départ"),
+      el("span",{style:{...S.itemAmount,color:"var(--text-2)"}},fmt(pot.startBalance))),
+    history.length===0 && pot.startBalance<=0 && el("p",{style:S.blockHint},"Aucun versement pour l'instant."),
+    history.map(function(h){
+      var parts=h.key.split("-");var mi=parseInt(parts[1],10)-1;
+      return el("div",{key:h.key,style:S.itemRow},
+        el("span",{style:{...S.itemDot,background:pot.color}}),
+        el("span",{style:S.lineLabel},MONTHS_FR[mi]+" "+parts[0]),
+        el("span",{style:{...S.itemAmount,color:pot.color}},"+ "+fmt(h.total)));
+    }),
+    el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:800,padding:"14px 2px 4px",marginTop:8,borderTop:"1px solid var(--border-2)"}},
+      el("span",null,"Total"),
+      el("span",{style:{color:pot.color}},fmt(total))));
+}
+
 function ConfirmModal({title,message,onClose,onConfirm}){
   return el(Modal,{title,onClose},
     el("p",{style:{fontSize:14,color:"var(--text-2)",marginBottom:20}},message),
@@ -504,6 +557,7 @@ const S = {
   resteLabel:{display:"flex",alignItems:"center",gap:7,fontSize:13,fontWeight:600,opacity:.95},
   resteVal:{fontSize:32,fontWeight:800,marginTop:3,letterSpacing:"-1px"},
   resteFoot:{fontSize:12,marginTop:5,opacity:.92},
+  allocateBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",marginTop:12,padding:"10px",borderRadius:11,border:"none",background:"rgba(255,255,255,.22)",color:"#fff",fontSize:13.5,fontWeight:700,cursor:"pointer"},
   actionRow:{display:"flex",gap:10},
   copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"none",background:"var(--surface)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:12,boxShadow:"var(--shadow)"},
   resetBtn:{border:"none",background:"transparent",color:"var(--text-4)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px 14px"},
