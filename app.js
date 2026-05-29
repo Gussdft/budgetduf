@@ -103,9 +103,10 @@ function App(){
   const [tab,setTab]           = useState("budget");
   const [theme,setTheme]       = useState(loadTheme());
   const [annualReturn,setAnnualReturn] = useState(3);
+  const [advisorMode,setAdvisorMode]   = useState(true);
 
-  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings&&typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); } setLoaded(true); },[]);
-  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn}}); },[months,pots,projects,annualReturn,loaded]);
+  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); } } setLoaded(true); },[]);
+  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn,advisorMode}}); },[months,pots,projects,annualReturn,advisorMode,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   const cycleTheme=function(){ setTheme(function(t){ var i=THEME_ORDER.indexOf(t); return THEME_ORDER[(i+1)%THEME_ORDER.length]; }); };
 
@@ -143,8 +144,8 @@ function App(){
     setMonthData(()=>({revenus:prev.revenus.map(x=>({...x,id:uid()})),fixed:prev.fixed.map(x=>({...x,id:uid()})),variable:prev.variable.map(x=>({...x,id:uid()})),excep:prev.excep.map(x=>({...x,id:uid(),amount:0})),deposits:[]}));};
   const resetMonth=()=>setMonthData(()=>blankMonth());
 
-  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings&&typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Chargement…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
@@ -196,10 +197,10 @@ function App(){
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         onAmount:(id,v)=>setAmount(kind,id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
 
-    // ---- TAB ÉPARGNE ----
+    // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(React.Fragment,null,
-      // Vue patrimoine globale
-      el(PatrimoineCard,{pots:pots,potBalance:potBalance,avgMonthly:avgMonthlySavings(),thisMonthSaved:totalSaved,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
+      // Résumé épargne
+      el(PatrimoineCard,{pots:pots,potBalance:potBalance,avgMonthly:avgMonthlySavings(),thisMonthSaved:totalSaved}),
       // Cagnottes
       el("div",{style:S.section},
         el("div",{style:S.sectionHead},
@@ -231,9 +232,11 @@ function App(){
             el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
             el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
             el("span",{style:{...S.itemAmount,color:(p&&p.color)||"var(--text-3)"}},fmt(d.amount)),
-            el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));}))),
+            el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));})))),
 
-      // Projets
+    // ---- TAB PROJETS ----
+    tab==="projets" && el(React.Fragment,null,
+      el(ProjectionControls,{advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
       el("div",{style:S.section},
         el("div",{style:S.sectionHead},
           el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
@@ -241,7 +244,7 @@ function App(){
         projects.length===0 && el("p",{style:S.blockHint},"Crée un projet (ex : Apport maison) avec un objectif et des cagnottes rattachées."),
         el("div",{style:{display:"flex",flexDirection:"column",gap:14}}, projects.map(function(proj){
           return el(ProjectCard,{key:proj.id,proj:proj,balance:projectBalance(proj),pots:pots,
-            avgMonthly:avgMonthlySavings(),annualReturn:annualReturn,
+            avgMonthly:avgMonthlySavings(),annualReturn:annualReturn,advisorMode:advisorMode,
             onEdit:function(){setModal({kind:"editproject",proj:proj});},
             onDelete:function(){setModal({kind:"confirmdelproj",projId:proj.id,projLabel:proj.label});},
             onContribution:function(v){editProject(proj.id,{monthlyContribution:v});}});
@@ -253,11 +256,11 @@ function App(){
 
     // ---- barre d'onglets en bas (style iOS) ----
     el("nav",{style:S.tabBar},
-      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["graphiques","bar-chart","Graphiques"]].map(function(t){
+      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
-          el(Icon,{name:icon,size:23,color:on?"#1D8BCE":"var(--text-3)"}),
-          el("span",{style:{fontSize:10.5,fontWeight:on?700:500}},label));
+          el(Icon,{name:icon,size:22,color:on?"#1D8BCE":"var(--text-3)"}),
+          el("span",{style:{fontSize:10,fontWeight:on?700:500}},label));
       })),
 
     // Modals
@@ -386,12 +389,19 @@ function LineChart({data,title}){
         el("text",{x:p.x,y:H+16,textAnchor:"middle",fontSize:9,fill:"var(--text-3)"},p.label)))));
 }
 
-// ---- Vue patrimoine globale ----
-function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved,annualReturn,setAnnualReturn}){
+// ---- Interrupteur style iOS ----
+function Switch({on,onToggle,color}){
+  return el("button",{onClick:onToggle,style:{width:46,height:28,borderRadius:14,border:"none",cursor:"pointer",padding:0,position:"relative",
+      background:on?(color||"#19A979"):"var(--border-3)",transition:"background .2s"}},
+    el("span",{style:{position:"absolute",top:3,left:on?21:3,width:22,height:22,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.3)",transition:"left .2s"}}));
+}
+
+// ---- Résumé épargne ----
+function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved}){
   var total=pots.reduce(function(s,p){return s+potBalance(p.id);},0);
   var parts=pots.map(function(p){return {label:p.label,color:p.color,val:potBalance(p.id)};}).filter(function(x){return x.val>0;});
   return el("div",{style:{...S.section,background:"linear-gradient(135deg,#1D8BCE,#13A4B4)",color:"#fff"}},
-    el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Patrimoine total"),
+    el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Épargne totale"),
     el("div",{style:{fontSize:34,fontWeight:800,letterSpacing:"-1px",margin:"2px 0 14px"}},fmt(total)),
     el("div",{style:{display:"flex",gap:10,marginBottom:parts.length?14:0}},
       el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Rythme moyen"),el("div",{style:S.patStatVal},fmt(avgMonthly)+" /mois")),
@@ -401,13 +411,25 @@ function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved,annualReturn,
         parts.map(function(x,i){return el("div",{key:i,style:{width:(x.val/total*100)+"%",background:x.color}});})),
       el("div",{style:{display:"flex",flexWrap:"wrap",gap:"6px 14px"}},
         parts.map(function(x,i){return el("span",{key:i,style:{display:"flex",alignItems:"center",gap:5,fontSize:11.5,opacity:.95}},
-          el("span",{style:{width:8,height:8,borderRadius:"50%",background:x.color}}),x.label+" "+(x.val/total*100).toFixed(0)+"%");}))),
-    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:16,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.2)"}},
-      el("span",{style:{fontSize:12.5,fontWeight:600,opacity:.95}},"Hypothèse de rendement annuel"),
+          el("span",{style:{width:8,height:8,borderRadius:"50%",background:x.color}}),x.label+" "+(x.val/total*100).toFixed(0)+"%");}))));
+}
+
+// ---- Réglages de projection (onglet Projets) ----
+function ProjectionControls({advisorMode,setAdvisorMode,annualReturn,setAnnualReturn}){
+  return el("div",{style:S.section},
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},
+      el("span",{style:{display:"flex",alignItems:"center",gap:9}},
+        el(Icon,{name:"bar-chart",size:16,color:"#945ECF"}),
+        el("span",null,
+          el("div",{style:{fontSize:14,fontWeight:700}},"Projection patrimoniale"),
+          el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:1}},"Courbes, simulateur et conseils"))),
+      el(Switch,{on:advisorMode,color:"#945ECF",onToggle:function(){setAdvisorMode(!advisorMode);}})),
+    advisorMode && el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:14,paddingTop:14,borderTop:"1px solid var(--border-2)"}},
+      el("span",{style:{fontSize:12.5,fontWeight:600,color:"var(--text-2)"}},"Hypothèse de rendement annuel"),
       el("div",{style:{display:"flex",alignItems:"center",gap:6}},
         el("input",{type:"number",inputMode:"decimal",value:annualReturn,onChange:function(e){setAnnualReturn(parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();},
-          style:{width:54,padding:"6px 8px",borderRadius:9,border:"none",background:"rgba(255,255,255,.22)",color:"#fff",fontSize:15,fontWeight:700,textAlign:"right",outline:"none"}}),
-        el("span",{style:{fontSize:15,fontWeight:700}},"%"))));
+          style:{width:60,padding:"7px 9px",borderRadius:9,border:"1.5px solid var(--border-3)",background:"var(--field-bg)",color:"var(--text)",fontSize:15,fontWeight:700,textAlign:"right",outline:"none"}}),
+        el("span",{style:{fontSize:15,fontWeight:700,color:"var(--text-2)"}},"%"))));
 }
 
 // ---- Courbe de projection (sans / avec rendement) ----
@@ -443,7 +465,7 @@ function ProjectionChart({current,monthly,goal,annualReturn,color}){
 }
 
 // ---- Carte projet (projection + simulateur + conseil) ----
-function ProjectCard({proj,balance,pots,avgMonthly,annualReturn,onEdit,onDelete,onContribution}){
+function ProjectCard({proj,balance,pots,avgMonthly,annualReturn,advisorMode,onEdit,onDelete,onContribution}){
   var color=proj.color||"#945ECF";
   var goal=proj.goal||0;
   var remaining=Math.max(0,goal-balance);
@@ -499,21 +521,27 @@ function ProjectCard({proj,balance,pots,avgMonthly,annualReturn,onEdit,onDelete,
       el("div",{style:S.potFoot},
         el("span",{style:{color:color,fontWeight:600}},pct.toFixed(0)+"%"),
         el("span",{style:{color:"var(--text-3)"}},done?"Objectif atteint 🎉":"reste "+fmt(remaining)))),
-    // courbe de projection
-    goal>0 && !done && el(ProjectionChart,{current:balance,monthly:monthly,goal:goal,annualReturn:annualReturn,color:color}),
-    // conseil
-    el("div",{style:{display:"flex",gap:8,alignItems:"flex-start",background:advice.color+"14",borderRadius:11,padding:"10px 12px",marginTop:12}},
+    // ===== mode projection (advisor) =====
+    advisorMode && goal>0 && !done && el(ProjectionChart,{current:balance,monthly:monthly,goal:goal,annualReturn:annualReturn,color:color}),
+    advisorMode && el("div",{style:{display:"flex",gap:8,alignItems:"flex-start",background:advice.color+"14",borderRadius:11,padding:"10px 12px",marginTop:12}},
       el(Icon,{name:advice.icon,size:15,color:advice.color,style:{flexShrink:0,marginTop:1}}),
       el("span",{style:{fontSize:12.5,color:"var(--text)",lineHeight:1.4}},advice.text)),
-    targetAlert && el("div",{style:{fontSize:12,color:"#C8516C",marginTop:8,fontWeight:600}},"⚠︎ "+targetAlert),
-    // simulateur
-    !done && el("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px dashed var(--border-2)"}},
+    advisorMode && targetAlert && el("div",{style:{fontSize:12,color:"#C8516C",marginTop:8,fontWeight:600}},"⚠︎ "+targetAlert),
+    advisorMode && !done && el("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px dashed var(--border-2)"}},
       el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
         el("span",{style:{fontSize:12.5,fontWeight:600,color:"var(--text-2)"}},"Simuler : épargne mensuelle"),
         el("span",{style:{fontSize:15,fontWeight:800,color:color}},fmt(monthly))),
       el("input",{type:"range",min:0,max:sliderMax,step:10,value:Math.min(monthly,sliderMax),
         onChange:function(e){onContribution(parseFloat(e.target.value)||0);},
         style:{width:"100%",accentColor:color}})),
+    // ===== mode simple (advisor off) =====
+    !advisorMode && !done && el("div",{style:S.projStats},
+      mLin!=null && el("div",{style:S.projStat},
+        el("span",{style:{color:"var(--text-3)",fontSize:11}},"Atteint vers"),
+        el("span",{style:{fontWeight:700,fontSize:12}},fmtMonthYear(addMonths(now,mLin)))),
+      reqMonthly!=null && el("div",{style:S.projStat},
+        el("span",{style:{color:"var(--text-3)",fontSize:11}},"Nécessaire / mois"),
+        el("span",{style:{fontWeight:700,fontSize:12,color:color}},fmt(reqMonthly)))),
     (proj.linkedPotIds||[]).length>0 && el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:10}},
       "Cagnottes : "+(proj.linkedPotIds||[]).map(function(id){var p=pots.find(function(x){return x.id===id;});return p?p.label:"?";}).join(", ")));
 }
