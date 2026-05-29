@@ -1,6 +1,11 @@
 const { useState, useEffect, useRef } = React;
 const el = React.createElement;
 
+// ---- Supabase ----
+const SUPABASE_URL = "https://slcmmbqdtsmvwhqdxzyu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsY21tYnFkdHNtdndocWR4enl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjcxNjMsImV4cCI6MjA4OTAwMzE2M30.X77k4KhtUo85HJKPrGOREswfKfdVQwdQ-rOYtHm_WIw";
+const db = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
 // ----- icônes SVG inline -----
 const PATHS = {
   "piggy-bank":'<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h0"/>',
@@ -26,6 +31,8 @@ const PATHS = {
   "contrast":'<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20Z"/>',
   "clock":'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   "wallet":'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2Z"/>',
+  "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+  "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -123,6 +130,138 @@ const blankMonth = () => ({
 });
 
 // ----------------------------------------------------------------------------
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("login");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = function() {
+    if (!email || !password) { setMsg("Email et mot de passe requis."); return; }
+    setLoading(true); setMsg("");
+    var p = mode === "login"
+      ? db.auth.signInWithPassword({email: email, password: password})
+      : db.auth.signUp({email: email, password: password});
+    p.then(function(res) {
+      setLoading(false);
+      if (res.error) { setMsg(res.error.message); }
+      else if (mode === "signup") { setMsg("Vérifie ton email pour confirmer, puis connecte-toi."); setMode("login"); }
+    });
+  };
+
+  return el("div", {style:{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"24px 20px",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"}},
+    el("div", {style:{maxWidth:400,margin:"0 auto",width:"100%"}},
+      el("div", {style:{display:"flex",justifyContent:"center",marginBottom:32}},
+        el("div", {style:{width:72,height:72,borderRadius:22,background:"linear-gradient(135deg,#1D8BCE,#19A979)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(29,139,206,.4)"}},
+          el(Icon,{name:"piggy-bank",size:36,color:"#fff"}))),
+      el("h1",{style:{textAlign:"center",fontSize:26,fontWeight:800,letterSpacing:"-0.5px",margin:"0 0 6px",color:"var(--text)"}},"Budget du foyer"),
+      el("p",{style:{textAlign:"center",fontSize:13.5,color:"var(--text-3)",margin:"0 0 32px"}},"Gérez votre budget à deux, en temps réel"),
+      el("div",{style:{background:"var(--surface)",borderRadius:20,padding:22,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}},
+        el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:12,padding:3,marginBottom:20}},
+          ["login","signup"].map(function(m){
+            var on=mode===m;
+            return el("button",{key:m,onClick:function(){setMode(m);setMsg("");},
+              style:{flex:1,padding:"9px 0",borderRadius:10,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer",boxShadow:on?"0 1px 4px rgba(0,0,0,.08)":"none"}},
+              m==="login"?"Connexion":"Créer un compte");
+          })),
+        el("div",{style:{marginBottom:14}},
+          el("label",{style:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6}},"Email"),
+          el("input",{type:"email",inputMode:"email",value:email,style:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},placeholder:"exemple@gmail.com",
+            onChange:function(e){setEmail(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+        el("div",{style:{marginBottom:20}},
+          el("label",{style:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6}},"Mot de passe"),
+          el("input",{type:"password",value:password,style:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},placeholder:"••••••••",
+            onChange:function(e){setPassword(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+        msg&&el("p",{style:{fontSize:13,color:msg.indexOf("Vérifie")>=0?"#19A979":"#C8516C",margin:"-8px 0 14px",textAlign:"center"}},msg),
+        el("button",{style:{width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)",opacity:loading?0.6:1},onClick:submit},
+          loading?"…":(mode==="login"?"Se connecter":"Créer mon compte")))));
+}
+
+function HouseholdScreen({onDone}) {
+  const [mode, setMode] = useState("choice");
+  const [name, setName] = useState("Mon foyer");
+  const [code, setCode] = useState("");
+  const [created, setCreated] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+  var btnStyle = {width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)"};
+  var backStyle = {width:"100%",padding:14,borderRadius:13,border:"none",background:"var(--surface-3)",color:"var(--text-2)",fontSize:15,fontWeight:700,cursor:"pointer"};
+  var wrap = {minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"24px 20px",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"};
+  var card = {maxWidth:400,margin:"0 auto",width:"100%",background:"var(--surface)",borderRadius:20,padding:22,boxShadow:"0 1px 4px rgba(0,0,0,.05)"};
+  var lbl = {display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6};
+  var inp = {width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"};
+
+  const create = function() {
+    setLoading(true); setMsg("");
+    db.rpc("create_household",{household_name:name}).then(function(res){
+      setLoading(false);
+      if(res.error){setMsg(res.error.message);}
+      else{setCreated({householdId:res.data.id,inviteCode:res.data.invite_code});}
+    });
+  };
+  const join = function() {
+    setLoading(true); setMsg("");
+    db.rpc("join_household_by_code",{code:code.trim().toUpperCase()}).then(function(res){
+      setLoading(false);
+      if(res.error){setMsg("Code invalide. Vérifie et réessaie.");}
+      else{onDone(res.data.id);}
+    });
+  };
+
+  if(created) return el("div",{style:wrap},
+    el("div",{style:card},
+      el("div",{style:{textAlign:"center",marginBottom:20}},
+        el("div",{style:{fontSize:44,marginBottom:8}},"🎉"),
+        el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Foyer créé !"),
+        el("p",{style:{fontSize:13.5,color:"var(--text-2)",margin:"8px 0 0"}},"Partage ce code avec ta conjointe")),
+      el("div",{style:{background:"linear-gradient(135deg,#1D8BCE14,#19A97914)",borderRadius:16,padding:"20px 24px",textAlign:"center",marginBottom:20}},
+        el("div",{style:{fontSize:11,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}},"Code d'invitation"),
+        el("div",{style:{fontSize:36,fontWeight:900,letterSpacing:"6px",color:"#1D8BCE",fontFamily:"monospace"}},created.inviteCode),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:8}},"Valide indéfiniment · partage-le à ta conjointe")),
+      el("button",{style:btnStyle,onClick:function(){onDone(created.householdId);}},
+        "Commencer »")));
+
+  if(mode==="choice") return el("div",{style:wrap},
+    el("div",{style:{maxWidth:400,margin:"0 auto",width:"100%"}},
+      el("div",{style:{textAlign:"center",marginBottom:32}},
+        el("div",{style:{fontSize:44,marginBottom:12}},"🏠"),
+        el("h2",{style:{margin:0,fontSize:22,fontWeight:800,color:"var(--text)"}},"Ton foyer"),
+        el("p",{style:{fontSize:13.5,color:"var(--text-3)",margin:"8px 0 0"}},"Crée un foyer ou rejoins celui de ton partenaire")),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+        el("button",{style:{background:"var(--surface)",borderRadius:18,padding:20,cursor:"pointer",border:"1.5px solid #1D8BCE30",textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,.05)"},onClick:function(){setMode("create");}},
+          el("div",{style:{fontSize:18,marginBottom:4}},"✨ Créer un foyer"),
+          el("div",{style:{fontSize:13,color:"var(--text-3)"}},"Tu génères un code d'invitation pour ton partenaire")),
+        el("button",{style:{background:"var(--surface)",borderRadius:18,padding:20,cursor:"pointer",border:"1.5px solid #19A97930",textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,.05)"},onClick:function(){setMode("join");}},
+          el("div",{style:{fontSize:18,marginBottom:4}},"🔗 Rejoindre un foyer"),
+          el("div",{style:{fontSize:13,color:"var(--text-3)"}},"Entre le code partagé par ton partenaire")))));
+
+  if(mode==="create") return el("div",{style:wrap},
+    el("div",{style:card},
+      el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Créer un foyer"),
+      el("div",{style:{marginBottom:20}},
+        el("label",{style:lbl},"Nom du foyer"),
+        el("input",{value:name,style:inp,placeholder:"ex : Foyer Dupont",autoFocus:true,
+          onChange:function(e){setName(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")create();}})),
+      msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
+      el("div",{style:{display:"flex",gap:10}},
+        el("button",{style:{...backStyle,flex:1},onClick:function(){setMode("choice");}},"Retour"),
+        el("button",{style:{...btnStyle,flex:1,opacity:loading?0.6:1},onClick:create},loading?"…":"Créer"))));
+
+  return el("div",{style:wrap},
+    el("div",{style:card},
+      el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Rejoindre un foyer"),
+      el("div",{style:{marginBottom:20}},
+        el("label",{style:lbl},"Code d'invitation (6 lettres)"),
+        el("input",{value:code,style:{...inp,textTransform:"uppercase",letterSpacing:"4px",fontSize:22,fontWeight:700,textAlign:"center",fontFamily:"monospace"},placeholder:"XXXXXX",maxLength:6,autoFocus:true,
+          onChange:function(e){setCode(e.target.value.toUpperCase());},onKeyDown:function(e){if(e.key==="Enter")join();}})),
+      msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
+      el("div",{style:{display:"flex",gap:10}},
+        el("button",{style:{...backStyle,flex:1},onClick:function(){setMode("choice");}},"Retour"),
+        el("button",{style:{...btnStyle,background:"linear-gradient(135deg,#19A979,#13A4B4)",flex:1,opacity:(loading||code.length<6)?0.6:1},onClick:join},loading?"…":"Rejoindre"))));
+}
+
+// ----------------------------------------------------------------------------
 function App(){
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
@@ -137,10 +276,85 @@ function App(){
   const [annualReturn,setAnnualReturn] = useState(3);
   const [advisorMode,setAdvisorMode]   = useState(true);
   const [profile,setProfile]           = useState(DEFAULT_PROFILE);
+  const [user, setUser] = useState(null);
+  const [householdId, setHouseholdId] = useState(null);
+  const [authReady, setAuthReady] = useState(!db);
+  const [householdCode, setHouseholdCode] = useState("");
+  const syncTimer = useRef(null);
+  const lastSyncRef = useRef(0);
+  const syncingRef = useRef(false);
 
   useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); },[]);
-  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn,advisorMode,profile}}); },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
+  useEffect(function(){
+    if(!loaded) return;
+    var payload={months:months,pots:pots,projects:projects,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    saveData(payload);
+    if(!householdId||!db||syncingRef.current) return;
+    if(syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current=setTimeout(function(){
+      lastSyncRef.current=Date.now();
+      db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
+    },1500);
+  },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
+  useEffect(function(){
+    if(!db) return;
+    db.auth.getSession().then(function(res){
+      var sess=res.data&&res.data.session;
+      if(sess&&sess.user){
+        setUser(sess.user);
+        db.from("user_households").select("household_id, households(invite_code)")
+          .eq("user_id",sess.user.id).single().then(function(hr){
+            if(hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
+            setAuthReady(true);
+          });
+      } else { setAuthReady(true); }
+    });
+    var sub=db.auth.onAuthStateChange(function(event,sess){
+      if(event==="SIGNED_OUT"){setUser(null);setHouseholdId(null);setHouseholdCode("");setLoaded(false);}
+    });
+    return function(){if(sub.data&&sub.data.subscription)sub.data.subscription.unsubscribe();};
+  },[]);
+  useEffect(function(){
+    if(!householdId||!db) return;
+    syncingRef.current=true;
+    db.from("budget_data").select("data").eq("household_id",householdId).single().then(function(res){
+      if(res.data&&res.data.data){
+        var d=res.data.data;
+        if(d.months)setMonths(d.months);
+        if(d.pots)setPots(d.pots);
+        if(d.projects)setProjects(d.projects);
+        if(d.settings){
+          if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
+          if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+        }
+      }
+      syncingRef.current=false;
+      setLoaded(true);
+    });
+  },[householdId]);
+  useEffect(function(){
+    if(!householdId||!db) return;
+    var ch=db.channel("budget:"+householdId)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"budget_data",filter:"household_id=eq."+householdId},function(payload){
+        if(Date.now()-lastSyncRef.current<3000) return;
+        var d=payload.new&&payload.new.data;
+        if(!d) return;
+        syncingRef.current=true;
+        if(d.months)setMonths(d.months);
+        if(d.pots)setPots(d.pots);
+        if(d.projects)setProjects(d.projects);
+        if(d.settings){
+          if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
+          if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+        }
+        setTimeout(function(){syncingRef.current=false;},500);
+      })
+      .subscribe();
+    return function(){db.removeChannel(ch);};
+  },[householdId]);
   const cycleTheme=function(){ setTheme(function(t){ var i=THEME_ORDER.indexOf(t); return THEME_ORDER[(i+1)%THEME_ORDER.length]; }); };
 
   const mk = monthKey(year,month);
@@ -171,6 +385,7 @@ function App(){
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
+  const addWithdrawal=(id,a,note)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:-Math.abs(a),note:note||""}]}));
   const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
   const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
   const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
@@ -181,7 +396,10 @@ function App(){
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
   const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
-  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Chargement…");
+  if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
+  if(authReady&&!user&&db) return el(LoginScreen,null);
+  if(authReady&&user&&!householdId&&db) return el(HouseholdScreen,{onDone:function(id){setHouseholdId(id);}});
+  if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Synchronisation…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
 
   return el("div",{style:S.app},
@@ -193,6 +411,11 @@ function App(){
           el("h1",{style:S.title},"Budget du foyer"),
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne"))),
       el("div",{style:{display:"flex",gap:8}},
+        user&&householdCode&&el("button",{style:{...S.iconBtn,fontSize:10,fontWeight:800,letterSpacing:"1px",width:"auto",padding:"0 10px",fontFamily:"monospace",color:"#1D8BCE"},
+          title:"Code d'invitation foyer — cliquer pour copier",
+          onClick:function(){try{navigator.clipboard.writeText(householdCode);}catch(e){}}},
+          householdCode),
+        user&&db&&el("button",{style:{...S.iconBtn,color:"#C8516C"},onClick:function(){db.auth.signOut();},title:"Se déconnecter"},el(Icon,{name:"log-out",size:18})),
         el("button",{style:S.iconBtn,onClick:cycleTheme,title:"Thème : "+theme},el(Icon,{name:THEME_ICON[theme],size:18})),
         el("button",{style:S.iconBtn,onClick:exportJSON,title:"Exporter"},el(Icon,{name:"download",size:18})),
         el("label",{style:{...S.iconBtn,cursor:"pointer"},title:"Importer"},
@@ -262,7 +485,7 @@ function App(){
             pct!==null && el(React.Fragment,null,
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
               el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
-            thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
+            thisMonth!==0 && el("div",{style:{...S.potMonthTag,color:thisMonth>0?"#19A979":"#C8516C"}},thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois"),
             el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
             (function(){
               var potKeys=Object.keys(months).sort();
@@ -274,15 +497,24 @@ function App(){
                 potAvg>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:"var(--surface-3)",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:"var(--text-2)",fontWeight:600}},fmt(potAvg)),"/mois en moy."),
                 mToGoal!=null&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:p.color+"14",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:p.color,fontWeight:700}},mToGoal>0?"~"+mToGoal+" mois":"Atteint"),mToGoal>0?" pour finir":""));
             })(),
-            el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
+            el("div",{style:{display:"flex",gap:8,marginTop:10}},
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser"),
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:"#C8516C",borderColor:"#C8516C40"},onClick:function(){setModal({kind:"withdraw",potId:p.id,potLabel:p.label,color:p.color,balance:bal});}},el(Icon,{name:"arrow-right",size:14,color:"#C8516C",style:{transform:"rotate(90deg)"}})," Retirer")));
         })),
         (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
-          el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
-          data.deposits.map(function(d){var p=pots.find(function(x){return x.id===d.potId;});return el("div",{key:d.id,style:S.itemRow},
-            el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
-            el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-            el("span",{style:{...S.itemAmount,color:(p&&p.color)||"var(--text-3)"}},fmt(d.amount)),
-            el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));})))),
+          el("div",{style:S.depHead},"Mouvements de "+MONTHS_FR[month]),
+          data.deposits.map(function(d){
+            var p=pots.find(function(x){return x.id===d.potId;});
+            var isW=d.amount<0;
+            var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
+            return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4}},
+              el("div",{style:{display:"flex",alignItems:"center",gap:11}},
+                el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
+                el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
+                el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
+                el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
+              d.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},d.note));
+          })))),
 
     // ---- TAB PROJETS ----
     tab==="projets" && el(React.Fragment,null,
@@ -321,7 +553,8 @@ function App(){
     (modal&&modal.kind==="editpot") && el(PotModal,{initial:modal.pot,onClose:()=>setModal(null),onSave:upd=>{editPot(modal.pot.id,upd);setModal(null);}}),
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
     (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
-    (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,history:potHistory(modal.pot.id),total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
+    (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,months:months,total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
+    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,onClose:()=>setModal(null),onSave:function(a,note){addWithdrawal(modal.potId,a,note);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -461,7 +694,7 @@ function PotSparkline({months,potId,year,month,color}){
     var t=m?(m.deposits||[]).filter(function(dep){return dep.potId===potId;}).reduce(function(a,dep){return a+dep.amount;},0):0;
     bars.push({label:ABBR[d.getMonth()],value:t,current:i===0});
   }
-  var maxVal=Math.max.apply(null,bars.map(function(b){return b.value;}));
+  var maxVal=Math.max.apply(null,bars.map(function(b){return Math.abs(b.value);}));
   if(maxVal===0) return null;
   var W=200,H=40,barW=22,gap=Math.floor((W-barW*6)/7);
   return el("div",{style:{marginTop:12}},
@@ -469,8 +702,8 @@ function PotSparkline({months,potId,year,month,color}){
     el("svg",{viewBox:"0 0 "+W+" "+(H+14),style:{width:"100%",overflow:"visible"}},
       bars.map(function(b,i){
         var x=gap+i*(barW+gap);
-        var h=Math.max(2,(b.value/maxVal)*(H-6));
-        var fillColor=b.current?color:(color+"88");
+        var h=Math.max(2,(Math.abs(b.value)/maxVal)*(H-6));
+        var fillColor=b.value<0?"#C8516C":(b.current?color:(color+"88"));
         return el("g",{key:i},
           el("rect",{x:x,y:H-h,width:barW,height:h,rx:3,fill:b.value>0?fillColor:"var(--border-3)",opacity:b.value>0?1:0.35}),
           b.value>0&&el("text",{x:x+barW/2,y:H-h-3,textAnchor:"middle",fontSize:7.5,fill:color,fontWeight:700},b.value>=1000?Math.round(b.value/100)/10+"k":b.value),
@@ -869,23 +1102,53 @@ function AllocateModal({pots,available,onClose,onSave}){
     el("button",{style:{...S.saveBtn,opacity:(allocated<=0||left<-0.001)?0.5:1},onClick:submit},"Verser "+fmt(allocated)));
 }
 
-function HistoryModal({pot,history,total,onClose}){
+function HistoryModal({pot,months,total,onClose}){
+  // reconstruct all entries with date, amount, note
+  var entries=[];
+  Object.keys(months).sort().forEach(function(k){
+    (months[k].deposits||[]).filter(function(d){return d.potId===pot.id;}).forEach(function(d){
+      entries.push({key:k,amount:d.amount,note:d.note||""});
+    });
+  });
+  var hasEntries=entries.length>0;
   return el(Modal,{title:"Historique — "+pot.label,onClose},
     pot.startBalance>0 && el("div",{style:{...S.itemRow,borderBottom:"1px dashed var(--border-2)"}},
       el("span",{style:{...S.itemDot,background:pot.color}}),
       el("span",{style:S.lineLabel},"Solde de départ"),
       el("span",{style:{...S.itemAmount,color:"var(--text-2)"}},fmt(pot.startBalance))),
-    history.length===0 && pot.startBalance<=0 && el("p",{style:S.blockHint},"Aucun versement pour l'instant."),
-    history.map(function(h){
-      var parts=h.key.split("-");var mi=parseInt(parts[1],10)-1;
-      return el("div",{key:h.key,style:S.itemRow},
-        el("span",{style:{...S.itemDot,background:pot.color}}),
-        el("span",{style:S.lineLabel},MONTHS_FR[mi]+" "+parts[0]),
-        el("span",{style:{...S.itemAmount,color:pot.color}},"+ "+fmt(h.total)));
+    !hasEntries && pot.startBalance<=0 && el("p",{style:S.blockHint},"Aucun mouvement pour l'instant."),
+    entries.map(function(e,i){
+      var parts=e.key.split("-");var mi=parseInt(parts[1],10)-1;
+      var isW=e.amount<0;
+      var amtColor=isW?"#C8516C":pot.color;
+      return el("div",{key:i,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4,borderBottom:"1px solid var(--border-2)"}},
+        el("div",{style:{display:"flex",alignItems:"center",gap:11}},
+          el("span",{style:{...S.itemDot,background:amtColor}}),
+          el("span",{style:S.lineLabel},MONTHS_FR[mi]+" "+parts[0]),
+          el("span",{style:{...S.itemAmount,color:amtColor}},(isW?"− "+fmt(-e.amount):"+ "+fmt(e.amount)))),
+        e.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},e.note));
     }),
     el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:800,padding:"14px 2px 4px",marginTop:8,borderTop:"1px solid var(--border-2)"}},
-      el("span",null,"Total"),
-      el("span",{style:{color:pot.color}},fmt(total))));
+      el("span",null,"Solde total"),
+      el("span",{style:{color:total>=0?pot.color:"#C8516C"}},fmt(total))));
+}
+
+function WithdrawModal({pot,onClose,onSave}){
+  const [amount,setAmount]=useState("");
+  const [note,setNote]=useState("");
+  const submit=function(){var a=parseFloat(amount);if(!a||a<=0)return;onSave(a,note.trim());};
+  return el(Modal,{title:"Retirer de « "+pot.potLabel+" »",onClose},
+    el("div",{style:{background:"#C8516C12",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"var(--text-2)"}},
+      "Solde actuel : ",el("strong",{style:{color:pot.color}},fmt(pot.balance))),
+    el("div",{style:{marginBottom:14}},
+      el("label",{style:S.fieldLabel},"Montant retiré (€)"),
+      el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,
+        onChange:function(e){setAmount(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&note)submit(); else if(e.key==="Enter"){}}})),
+    el("div",{style:{marginBottom:18}},
+      el("label",{style:S.fieldLabel},"Motif (optionnel — ex : Réparation voiture, Week-end à Paris…)"),
+      el("input",{value:note,placeholder:"Pourquoi ce retrait ?",style:S.input,onChange:function(e){setNote(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+    parseFloat(amount)>pot.balance && el("p",{style:{fontSize:12,color:"#C8516C",margin:"-8px 0 12px"}},"⚠︎ Le montant dépasse le solde disponible."),
+    el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44"},onClick:submit},"Confirmer le retrait"));
 }
 
 function ConfirmModal({title,message,onClose,onConfirm}){
