@@ -312,6 +312,14 @@ function App(){
     });
     var sub=db.auth.onAuthStateChange(function(event,sess){
       if(event==="SIGNED_OUT"){setUser(null);setHouseholdId(null);setHouseholdCode("");setLoaded(false);}
+      if((event==="SIGNED_IN"||event==="TOKEN_REFRESHED")&&sess&&sess.user){
+        setUser(sess.user);
+        db.from("user_households").select("household_id, households(invite_code)")
+          .eq("user_id",sess.user.id).single().then(function(hr){
+            if(hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
+            setAuthReady(true);
+          });
+      }
     });
     return function(){if(sub.data&&sub.data.subscription)sub.data.subscription.unsubscribe();};
   },[]);
