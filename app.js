@@ -60,6 +60,30 @@ function projSeries(current,monthly,rm,n){
 const fmtMonthYear = (d) => MONTHS_FR[d.getMonth()]+" "+d.getFullYear();
 const addMonths = (d,n) => new Date(d.getFullYear(), d.getMonth()+n, 1);
 
+// ----- profils de risque (conseiller patrimonial) -----
+const RISK = {
+  prudent:   {label:"Prudent",   stock:25, ret:2.5, emo:6, color:"#1D8BCE", desc:"Sécurité avant tout, peu de fluctuations."},
+  equilibre: {label:"Équilibré", stock:50, ret:4.5, emo:4, color:"#19A979", desc:"Équilibre entre sécurité et performance."},
+  dynamique: {label:"Dynamique", stock:75, ret:7,   emo:3, color:"#E8743B", desc:"Recherche de performance, accepte le risque."},
+};
+const DEFAULT_PROFILE = {age:35, horizon:10, risk:"equilibre"};
+function stockPct(risk,age){
+  var base=(RISK[risk]||RISK.equilibre).stock;
+  var adj=Math.max(0,(age||0)-40)*0.5;
+  return clamp(Math.round(base-adj),10,85);
+}
+// allocation recommandée d'un patrimoine total
+function recommendedAllocation(total,risk,age,monthlyExpenses){
+  var r=RISK[risk]||RISK.equilibre;
+  var emergency=Math.round((monthlyExpenses||0)*r.emo);
+  var precaution=Math.min(total,emergency);
+  var investable=Math.max(0,total-precaution);
+  var sp=stockPct(risk,age);
+  var dynamique=Math.round(investable*sp/100);
+  var securise=Math.max(0,investable-dynamique);
+  return {emergency:emergency,precaution:precaution,securise:securise,dynamique:dynamique,stockPct:sp};
+}
+
 const PRESET = {
   revenus: ["Salaire Juliette","Salaire Augustin","CAF"],
   fixed:   ["Loyer","Téléphone","Internet","Canal","Assurance","Sport"],
@@ -104,9 +128,10 @@ function App(){
   const [theme,setTheme]       = useState(loadTheme());
   const [annualReturn,setAnnualReturn] = useState(3);
   const [advisorMode,setAdvisorMode]   = useState(true);
+  const [profile,setProfile]           = useState(DEFAULT_PROFILE);
 
-  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); } } setLoaded(true); },[]);
-  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn,advisorMode}}); },[months,pots,projects,annualReturn,advisorMode,loaded]);
+  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); },[]);
+  useEffect(()=>{ if(loaded) saveData({months,pots,projects,settings:{annualReturn,advisorMode,profile}}); },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   const cycleTheme=function(){ setTheme(function(t){ var i=THEME_ORDER.indexOf(t); return THEME_ORDER[(i+1)%THEME_ORDER.length]; }); };
 
@@ -123,6 +148,7 @@ function App(){
   const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
   const potBalance=(id)=>{var p=pots.find(function(x){return x.id===id;});return (p&&p.startBalance||0)+potDeposits(id);};
   const avgMonthlySavings=()=>{var keys=Object.keys(months).sort();if(keys.length===0)return 0;var total=keys.reduce(function(s,k){return s+(months[k].deposits||[]).reduce(function(a,d){return a+d.amount;},0);},0);return total/keys.length;};
+  const avgMonthlyExpenses=()=>{var keys=Object.keys(months);if(keys.length===0)return 0;var total=keys.reduce(function(s,k){var m=months[k];return s+sum(m.fixed||[])+sum(m.variable||[])+sum(m.excep||[]);},0);return total/keys.length;};
   const projectBalance=(proj)=>(proj.initialAmount||0)+(proj.linkedPotIds||[]).reduce(function(s,id){return s+potBalance(id);},0);
 
   const changeMonth=(d)=>{let m=month+d,y=year;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMonth(m);setYear(y);};
@@ -144,8 +170,8 @@ function App(){
     setMonthData(()=>({revenus:prev.revenus.map(x=>({...x,id:uid()})),fixed:prev.fixed.map(x=>({...x,id:uid()})),variable:prev.variable.map(x=>({...x,id:uid()})),excep:prev.excep.map(x=>({...x,id:uid(),amount:0})),deposits:[]}));};
   const resetMonth=()=>setMonthData(()=>blankMonth());
 
-  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Chargement…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
@@ -237,6 +263,7 @@ function App(){
     // ---- TAB PROJETS ----
     tab==="projets" && el(React.Fragment,null,
       el(ProjectionControls,{advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
+      advisorMode && el(ConseilCard,{profile:profile,total:pots.reduce(function(s,p){return s+potBalance(p.id);},0),monthlyExpenses:avgMonthlyExpenses(),annualReturn:annualReturn,setAnnualReturn:setAnnualReturn,onEditProfile:function(){setModal({kind:"profile"});}}),
       el("div",{style:S.section},
         el("div",{style:S.sectionHead},
           el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
@@ -251,7 +278,9 @@ function App(){
         })))),
 
     // ---- TAB GRAPHIQUES ----
-    tab==="graphiques" && el(Charts,{months,pots,year,month,mk})
+    tab==="graphiques" && el(React.Fragment,null,
+      el(AnnualReview,{months:months,year:year}),
+      el(Charts,{months,pots,year,month,mk}))
     ), // fin du panneau d'onglet
 
     // ---- barre d'onglets en bas (style iOS) ----
@@ -280,7 +309,8 @@ function App(){
       title:"Supprimer le projet",
       message:"Supprimer le projet « "+modal.projLabel+" » ?",
       onClose:()=>setModal(null),
-      onConfirm:()=>{delProject(modal.projId);setModal(null);}})
+      onConfirm:()=>{delProject(modal.projId);setModal(null);}}),
+    (modal&&modal.kind==="profile") && el(ProfileModal,{initial:profile,onClose:()=>setModal(null),onSave:function(p){setProfile(p);setModal(null);}})
   );
 }
 
@@ -430,6 +460,82 @@ function ProjectionControls({advisorMode,setAdvisorMode,annualReturn,setAnnualRe
         el("input",{type:"number",inputMode:"decimal",value:annualReturn,onChange:function(e){setAnnualReturn(parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();},
           style:{width:60,padding:"7px 9px",borderRadius:9,border:"1.5px solid var(--border-3)",background:"var(--field-bg)",color:"var(--text)",fontSize:15,fontWeight:700,textAlign:"right",outline:"none"}}),
         el("span",{style:{fontSize:15,fontWeight:700,color:"var(--text-2)"}},"%"))));
+}
+
+// ---- Conseil patrimonial : profil + répartition recommandée ----
+function ConseilCard({profile,total,monthlyExpenses,annualReturn,setAnnualReturn,onEditProfile}){
+  var r=RISK[profile.risk]||RISK.equilibre;
+  var alloc=recommendedAllocation(total,profile.risk,profile.age,monthlyExpenses);
+  var precautionPct=alloc.emergency>0?Math.min(100,(alloc.precaution/alloc.emergency)*100):100;
+  var buckets=[
+    {label:"Précaution",color:"#1D8BCE",val:alloc.precaution,hint:"livret / cash"},
+    {label:"Sécurisé",color:"#19A979",val:alloc.securise,hint:"fonds €, obligations"},
+    {label:"Dynamique",color:"#E8743B",val:alloc.dynamique,hint:"actions, immo"},
+  ];
+  var sumB=buckets.reduce(function(s,b){return s+b.val;},0)||1;
+  return el("div",{style:S.section},
+    el("div",{style:S.sectionHead},
+      el("span",{style:S.sectionTitle},el(Icon,{name:"target",size:16,color:r.color})," Conseil patrimonial"),
+      el("button",{style:{...S.smallBtn,color:r.color,background:r.color+"18"},onClick:onEditProfile},el(Icon,{name:"edit-2",size:13})," Mon profil")),
+    // résumé profil
+    el("div",{style:{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"var(--text-2)",marginBottom:14}},
+      el("span",{style:{fontWeight:700,color:r.color}},"Profil "+r.label),
+      el("span",null,"· "+profile.age+" ans · horizon "+profile.horizon+" ans")),
+    // rendement suggéré
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:r.color+"12",borderRadius:11,padding:"10px 12px",marginBottom:14}},
+      el("span",{style:{fontSize:12.5,color:"var(--text)"}},"Rendement attendu pour ce profil : ",el("strong",{style:{color:r.color}},r.ret+" %/an")),
+      Math.abs(annualReturn-r.ret)>0.01 && el("button",{style:{border:"none",background:r.color,color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"},onClick:function(){setAnnualReturn(r.ret);}},"Appliquer")),
+    // répartition recommandée
+    el("div",{style:{fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}},"Répartition recommandée"),
+    total<=0 ? el("p",{style:S.blockHint},"Renseigne tes cagnottes pour voir la répartition conseillée de ton patrimoine.") :
+    el(React.Fragment,null,
+      el("div",{style:{display:"flex",height:12,borderRadius:6,overflow:"hidden",marginBottom:12}},
+        buckets.map(function(b,i){return el("div",{key:i,style:{width:(b.val/sumB*100)+"%",background:b.color}});})),
+      buckets.map(function(b,i){return el("div",{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<2?"1px solid var(--border-2)":"none"}},
+        el("span",{style:{width:10,height:10,borderRadius:3,background:b.color,flexShrink:0}}),
+        el("span",{style:{flex:1}},el("div",{style:{fontSize:13.5,fontWeight:600}},b.label),el("div",{style:{fontSize:11,color:"var(--text-3)"}},b.hint)),
+        el("span",{style:{textAlign:"right"}},el("div",{style:{fontWeight:800,fontSize:14,color:b.color}},fmt(b.val)),el("div",{style:{fontSize:11,color:"var(--text-3)"}},(b.val/sumB*100).toFixed(0)+"%")));})),
+    alloc.emergency>0 && el("div",{style:{marginTop:12,fontSize:12,color:"var(--text-2)"}},
+      el("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+        el("span",null,"Matelas de précaution ("+r.emo+" mois de dépenses)"),
+        el("span",{style:{fontWeight:700,color:precautionPct>=100?"#19A979":"#E8743B"}},fmt(alloc.precaution)+" / "+fmt(alloc.emergency))),
+      el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:precautionPct+"%",background:precautionPct>=100?"#19A979":"#E8743B"}})),
+      precautionPct<100 && el("div",{style:{marginTop:6,fontSize:11.5,color:"#E8743B",fontWeight:600}},"Priorité : compléter ton épargne de précaution avant d'investir.")));
+}
+
+// ---- Bilan annuel ----
+function AnnualReview({months,year}){
+  var sum=function(arr){return arr?arr.reduce(function(s,x){return s+(x.amount||0);},0):0;};
+  var saved=[],rev=0,dep=0,totalSaved=0,best={m:-1,v:-1},i;
+  for(i=0;i<12;i++){
+    var m=months[monthKey(year,i)];
+    var sv=m?sum(m.deposits):0;
+    saved.push(sv); totalSaved+=sv;
+    if(m){ rev+=sum(m.revenus); dep+=sum(m.fixed)+sum(m.variable)+sum(m.excep); }
+    if(sv>best.v){ best={m:i,v:sv}; }
+  }
+  var rate=rev>0?(totalSaved/rev)*100:0;
+  var maxBar=Math.max.apply(null,saved.concat([1]));
+  var hasData=totalSaved>0||rev>0||dep>0;
+  return el("div",{style:S.section},
+    el("div",{style:{...S.sectionHead,marginBottom:14}},el("span",{style:{...S.sectionTitle,fontSize:13}},"Bilan "+year)),
+    !hasData ? el("p",{style:S.blockHint},"Pas encore de données pour "+year+".") :
+    el(React.Fragment,null,
+      el("div",{style:{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Épargné sur l'année"),el("div",{style:{...S.bilanVal,color:"#19A979"}},fmt(totalSaved))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux d'épargne"),el("div",{style:S.bilanVal},rate.toFixed(0)+" %"))),
+      el("div",{style:{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Revenus"),el("div",{style:{...S.bilanVal,fontSize:15}},fmt(rev))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Dépenses"),el("div",{style:{...S.bilanVal,fontSize:15}},fmt(dep)))),
+      best.v>0 && el("div",{style:{fontSize:12,color:"var(--text-2)",marginBottom:12}},"💪 Meilleur mois : ",el("strong",null,MONTHS_FR[best.m])," ("+fmt(best.v)+")"),
+      // mini barres épargne par mois
+      el("svg",{viewBox:"0 0 320 70",style:{width:"100%"}},
+        saved.map(function(v,idx){
+          var x=4+idx*26, h=Math.max(1,(v/maxBar)*54);
+          return el("g",{key:idx},
+            el("rect",{x:x,y:60-h,width:18,height:h,rx:3,fill:v>0?"#19A979":"var(--border-3)",opacity:v>0?0.9:0.5}),
+            el("text",{x:x+9,y:68,textAnchor:"middle",fontSize:8,fill:"var(--text-4)"},["J","F","M","A","M","J","J","A","S","O","N","D"][idx]));
+        }))));
 }
 
 // ---- Courbe de projection (sans / avec rendement) ----
@@ -617,6 +723,29 @@ function ProjectModal({initial,pots,onClose,onSave}){
     el("button",{style:S.saveBtn,onClick:submit},initial?"Enregistrer":"Créer le projet"));
 }
 
+function ProfileModal({initial,onClose,onSave}){
+  const [age,setAge]=useState(String(initial.age||35));
+  const [horizon,setHorizon]=useState(String(initial.horizon||10));
+  const [risk,setRisk]=useState(initial.risk||"equilibre");
+  const submit=function(){onSave({age:parseInt(age,10)||35,horizon:parseInt(horizon,10)||10,risk:risk});};
+  return el(Modal,{title:"Mon profil investisseur",onClose},
+    el("div",{style:{display:"flex",gap:12,marginBottom:14}},
+      el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Âge"),el("input",{type:"number",inputMode:"numeric",value:age,style:S.input,onChange:function(e){setAge(e.target.value);}})),
+      el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Horizon (ans)"),el("input",{type:"number",inputMode:"numeric",value:horizon,style:S.input,onChange:function(e){setHorizon(e.target.value);}}))),
+    el("label",{style:S.fieldLabel},"Tolérance au risque"),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:18}},
+      ["prudent","equilibre","dynamique"].map(function(k){
+        var r=RISK[k];var on=risk===k;
+        return el("button",{key:k,onClick:function(){setRisk(k);},style:{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"11px 13px",borderRadius:12,cursor:"pointer",
+            border:on?("2px solid "+r.color):"2px solid var(--border)",background:on?r.color+"14":"var(--surface-2)"}},
+          el("span",{style:{width:14,height:14,borderRadius:"50%",flexShrink:0,border:on?("4px solid "+r.color):"2px solid var(--border-3)"}}),
+          el("span",null,
+            el("div",{style:{fontSize:14,fontWeight:700,color:on?r.color:"var(--text)"}},r.label+" · ~"+r.ret+" %/an"),
+            el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:1}},r.desc)));
+      })),
+    el("button",{style:S.saveBtn,onClick:submit},"Enregistrer mon profil"));
+}
+
 function DepositModal({pot,maxSuggest,onClose,onSave}){
   const [amount,setAmount]=useState("");
   const submit=()=>{const a=parseFloat(amount);if(!a||a<=0)return;onSave(a);};
@@ -741,6 +870,9 @@ const S = {
   patStat:{flex:1,background:"rgba(255,255,255,.18)",borderRadius:11,padding:"9px 12px"},
   patStatLabel:{fontSize:10.5,opacity:.9,marginBottom:2},
   patStatVal:{fontSize:14,fontWeight:800},
+  bilanStat:{flex:1,minWidth:120,background:"var(--surface-2)",borderRadius:12,padding:"10px 12px"},
+  bilanLabel:{fontSize:11,color:"var(--text-3)",marginBottom:2},
+  bilanVal:{fontSize:18,fontWeight:800},
   projCard:{background:"var(--surface-2)",borderRadius:18,padding:16,border:"1.5px solid var(--border)"},
   projStats:{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"},
   projStat:{display:"flex",flexDirection:"column",gap:2,background:"var(--surface)",borderRadius:10,padding:"8px 12px",flex:1},
