@@ -171,6 +171,7 @@ function App(){
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
+  const addWithdrawal=(id,a,note)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:-Math.abs(a),note:note||""}]}));
   const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
   const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
   const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
@@ -262,7 +263,7 @@ function App(){
             pct!==null && el(React.Fragment,null,
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
               el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
-            thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
+            thisMonth!==0 && el("div",{style:{...S.potMonthTag,color:thisMonth>0?"#19A979":"#C8516C"}},thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois"),
             el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
             (function(){
               var potKeys=Object.keys(months).sort();
@@ -274,15 +275,24 @@ function App(){
                 potAvg>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:"var(--surface-3)",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:"var(--text-2)",fontWeight:600}},fmt(potAvg)),"/mois en moy."),
                 mToGoal!=null&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:p.color+"14",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:p.color,fontWeight:700}},mToGoal>0?"~"+mToGoal+" mois":"Atteint"),mToGoal>0?" pour finir":""));
             })(),
-            el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
+            el("div",{style:{display:"flex",gap:8,marginTop:10}},
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser"),
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:"#C8516C",borderColor:"#C8516C40"},onClick:function(){setModal({kind:"withdraw",potId:p.id,potLabel:p.label,color:p.color,balance:bal});}},el(Icon,{name:"arrow-right",size:14,color:"#C8516C",style:{transform:"rotate(90deg)"}})," Retirer")));
         })),
         (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
-          el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
-          data.deposits.map(function(d){var p=pots.find(function(x){return x.id===d.potId;});return el("div",{key:d.id,style:S.itemRow},
-            el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
-            el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-            el("span",{style:{...S.itemAmount,color:(p&&p.color)||"var(--text-3)"}},fmt(d.amount)),
-            el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));})))),
+          el("div",{style:S.depHead},"Mouvements de "+MONTHS_FR[month]),
+          data.deposits.map(function(d){
+            var p=pots.find(function(x){return x.id===d.potId;});
+            var isW=d.amount<0;
+            var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
+            return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4}},
+              el("div",{style:{display:"flex",alignItems:"center",gap:11}},
+                el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
+                el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
+                el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
+                el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
+              d.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},d.note));
+          })))),
 
     // ---- TAB PROJETS ----
     tab==="projets" && el(React.Fragment,null,
@@ -321,7 +331,8 @@ function App(){
     (modal&&modal.kind==="editpot") && el(PotModal,{initial:modal.pot,onClose:()=>setModal(null),onSave:upd=>{editPot(modal.pot.id,upd);setModal(null);}}),
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
     (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
-    (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,history:potHistory(modal.pot.id),total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
+    (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,months:months,total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
+    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,onClose:()=>setModal(null),onSave:function(a,note){addWithdrawal(modal.potId,a,note);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -461,7 +472,7 @@ function PotSparkline({months,potId,year,month,color}){
     var t=m?(m.deposits||[]).filter(function(dep){return dep.potId===potId;}).reduce(function(a,dep){return a+dep.amount;},0):0;
     bars.push({label:ABBR[d.getMonth()],value:t,current:i===0});
   }
-  var maxVal=Math.max.apply(null,bars.map(function(b){return b.value;}));
+  var maxVal=Math.max.apply(null,bars.map(function(b){return Math.abs(b.value);}));
   if(maxVal===0) return null;
   var W=200,H=40,barW=22,gap=Math.floor((W-barW*6)/7);
   return el("div",{style:{marginTop:12}},
@@ -469,8 +480,8 @@ function PotSparkline({months,potId,year,month,color}){
     el("svg",{viewBox:"0 0 "+W+" "+(H+14),style:{width:"100%",overflow:"visible"}},
       bars.map(function(b,i){
         var x=gap+i*(barW+gap);
-        var h=Math.max(2,(b.value/maxVal)*(H-6));
-        var fillColor=b.current?color:(color+"88");
+        var h=Math.max(2,(Math.abs(b.value)/maxVal)*(H-6));
+        var fillColor=b.value<0?"#C8516C":(b.current?color:(color+"88"));
         return el("g",{key:i},
           el("rect",{x:x,y:H-h,width:barW,height:h,rx:3,fill:b.value>0?fillColor:"var(--border-3)",opacity:b.value>0?1:0.35}),
           b.value>0&&el("text",{x:x+barW/2,y:H-h-3,textAnchor:"middle",fontSize:7.5,fill:color,fontWeight:700},b.value>=1000?Math.round(b.value/100)/10+"k":b.value),
@@ -869,23 +880,53 @@ function AllocateModal({pots,available,onClose,onSave}){
     el("button",{style:{...S.saveBtn,opacity:(allocated<=0||left<-0.001)?0.5:1},onClick:submit},"Verser "+fmt(allocated)));
 }
 
-function HistoryModal({pot,history,total,onClose}){
+function HistoryModal({pot,months,total,onClose}){
+  // reconstruct all entries with date, amount, note
+  var entries=[];
+  Object.keys(months).sort().forEach(function(k){
+    (months[k].deposits||[]).filter(function(d){return d.potId===pot.id;}).forEach(function(d){
+      entries.push({key:k,amount:d.amount,note:d.note||""});
+    });
+  });
+  var hasEntries=entries.length>0;
   return el(Modal,{title:"Historique — "+pot.label,onClose},
     pot.startBalance>0 && el("div",{style:{...S.itemRow,borderBottom:"1px dashed var(--border-2)"}},
       el("span",{style:{...S.itemDot,background:pot.color}}),
       el("span",{style:S.lineLabel},"Solde de départ"),
       el("span",{style:{...S.itemAmount,color:"var(--text-2)"}},fmt(pot.startBalance))),
-    history.length===0 && pot.startBalance<=0 && el("p",{style:S.blockHint},"Aucun versement pour l'instant."),
-    history.map(function(h){
-      var parts=h.key.split("-");var mi=parseInt(parts[1],10)-1;
-      return el("div",{key:h.key,style:S.itemRow},
-        el("span",{style:{...S.itemDot,background:pot.color}}),
-        el("span",{style:S.lineLabel},MONTHS_FR[mi]+" "+parts[0]),
-        el("span",{style:{...S.itemAmount,color:pot.color}},"+ "+fmt(h.total)));
+    !hasEntries && pot.startBalance<=0 && el("p",{style:S.blockHint},"Aucun mouvement pour l'instant."),
+    entries.map(function(e,i){
+      var parts=e.key.split("-");var mi=parseInt(parts[1],10)-1;
+      var isW=e.amount<0;
+      var amtColor=isW?"#C8516C":pot.color;
+      return el("div",{key:i,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4,borderBottom:"1px solid var(--border-2)"}},
+        el("div",{style:{display:"flex",alignItems:"center",gap:11}},
+          el("span",{style:{...S.itemDot,background:amtColor}}),
+          el("span",{style:S.lineLabel},MONTHS_FR[mi]+" "+parts[0]),
+          el("span",{style:{...S.itemAmount,color:amtColor}},(isW?"− "+fmt(-e.amount):"+ "+fmt(e.amount)))),
+        e.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},e.note));
     }),
     el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:800,padding:"14px 2px 4px",marginTop:8,borderTop:"1px solid var(--border-2)"}},
-      el("span",null,"Total"),
-      el("span",{style:{color:pot.color}},fmt(total))));
+      el("span",null,"Solde total"),
+      el("span",{style:{color:total>=0?pot.color:"#C8516C"}},fmt(total))));
+}
+
+function WithdrawModal({pot,onClose,onSave}){
+  const [amount,setAmount]=useState("");
+  const [note,setNote]=useState("");
+  const submit=function(){var a=parseFloat(amount);if(!a||a<=0)return;onSave(a,note.trim());};
+  return el(Modal,{title:"Retirer de « "+pot.potLabel+" »",onClose},
+    el("div",{style:{background:"#C8516C12",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"var(--text-2)"}},
+      "Solde actuel : ",el("strong",{style:{color:pot.color}},fmt(pot.balance))),
+    el("div",{style:{marginBottom:14}},
+      el("label",{style:S.fieldLabel},"Montant retiré (€)"),
+      el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,
+        onChange:function(e){setAmount(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&note)submit(); else if(e.key==="Enter"){}}})),
+    el("div",{style:{marginBottom:18}},
+      el("label",{style:S.fieldLabel},"Motif (optionnel — ex : Réparation voiture, Week-end à Paris…)"),
+      el("input",{value:note,placeholder:"Pourquoi ce retrait ?",style:S.input,onChange:function(e){setNote(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+    parseFloat(amount)>pot.balance && el("p",{style:{fontSize:12,color:"#C8516C",margin:"-8px 0 12px"}},"⚠︎ Le montant dépasse le solde disponible."),
+    el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44"},onClick:submit},"Confirmer le retrait"));
 }
 
 function ConfirmModal({title,message,onClose,onConfirm}){
