@@ -66,13 +66,14 @@ function App(){
   const [year,setYear]   = useState(now.getFullYear());
   const [month,setMonth] = useState(now.getMonth());
   const [months,setMonths] = useState({});
-  const [pots,setPots]     = useState([]);
-  const [loaded,setLoaded] = useState(false);
-  const [modal,setModal]   = useState(null);
-  const [tab,setTab]       = useState("budget");
+  const [pots,setPots]         = useState([]);
+  const [projects,setProjects] = useState([]);
+  const [loaded,setLoaded]     = useState(false);
+  const [modal,setModal]       = useState(null);
+  const [tab,setTab]           = useState("budget");
 
-  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); } setLoaded(true); },[]);
-  useEffect(()=>{ if(loaded) saveData({months,pots}); },[months,pots,loaded]);
+  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); } setLoaded(true); },[]);
+  useEffect(()=>{ if(loaded) saveData({months,pots,projects}); },[months,pots,projects,loaded]);
 
   const mk = monthKey(year,month);
   const data = months[mk] || blankMonth();
@@ -84,7 +85,10 @@ function App(){
   const totalSaved=sum(data.deposits||[]);
   const reste=totalRevenus-totalDep;
   const nonAffecte=reste-totalSaved;
-  const potBalance=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
+  const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
+  const potBalance=(id)=>{var p=pots.find(function(x){return x.id===id;});return (p&&p.startBalance||0)+potDeposits(id);};
+  const avgMonthlySavings=()=>{var keys=Object.keys(months).sort();if(keys.length===0)return 0;var total=keys.reduce(function(s,k){return s+(months[k].deposits||[]).reduce(function(a,d){return a+d.amount;},0);},0);return total/keys.length;};
+  const projectBalance=(proj)=>(proj.initialAmount||0)+(proj.linkedPotIds||[]).reduce(function(s,id){return s+potBalance(id);},0);
 
   const changeMonth=(d)=>{let m=month+d,y=year;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMonth(m);setYear(y);};
   const setAmount=(k,id,a)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,amount:a}:x)}));
@@ -93,7 +97,10 @@ function App(){
   const renameLine=(k,id,l)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,label:l}:x)}));
   const addPot=(p)=>setPots(prev=>[...prev,{...p,id:uid()}]);
   const delPot=(id)=>{setPots(prev=>prev.filter(p=>p.id!==id));setMonths(prev=>{const o={};Object.entries(prev).forEach(([k,v])=>o[k]={...v,deposits:(v.deposits||[]).filter(d=>d.potId!==id)});return o;});};
-  const editPot=(id,upd)=>setPots(prev=>prev.map(p=>p.id===id?{...p,...upd}:p));
+  const editPot=(id,upd)=>setPots(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
+  const addProject=(proj)=>setProjects(prev=>[...prev,Object.assign({},proj,{id:uid()})]);
+  const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
+  const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
   const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
   const copyPrev=()=>{const d=new Date(year,month-1,1);const pk=monthKey(d.getFullYear(),d.getMonth());const prev=months[pk];if(!prev)return;
@@ -101,7 +108,7 @@ function App(){
   const resetMonth=()=>setMonthData(()=>blankMonth());
 
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);}catch(e){alert("Fichier invalide");}};r.readAsText(f);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"#8a94a6"}},"Chargement…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
@@ -155,35 +162,85 @@ function App(){
         onAmount:(id,v)=>setAmount(kind,id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
 
     // ---- TAB ÉPARGNE ----
-    tab==="epargne" && el("div",{style:S.section},
-      el("div",{style:S.sectionHead},
-        el("span",{style:S.sectionTitle},el("span",{style:{color:"#1D8BCE",display:"flex"}},el(Icon,{name:"target",size:16,color:"#1D8BCE"}))," Cagnottes d'épargne"),
-        el("button",{style:{...S.smallBtn,color:"#1D8BCE",background:"#1D8BCE14"},onClick:()=>setModal({kind:"newpot"})},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Cagnotte")),
-      pots.length===0 && el("p",{style:S.blockHint},"Crée une cagnotte (ex : Apport maison) puis verse ton reste dedans chaque mois."),
-      el("div",{style:S.potList}, pots.map(p=>{
-        const bal=potBalance(p.id);
-        const thisMonth=(data.deposits||[]).filter(d=>d.potId===p.id).reduce((a,d)=>a+d.amount,0);
-        const pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
-        return el("div",{key:p.id,style:S.potCard},
-          el("div",{style:S.potTop},
-            el("span",{style:{display:"flex",alignItems:"center",gap:9}},el(Icon,{name:"piggy-bank",size:16,color:p.color}),el("strong",{style:{fontSize:14}},p.label)),
-            el("div",{style:{display:"flex",gap:4}},
-              el("button",{style:S.delBtn,title:"Modifier",onClick:()=>setModal({kind:"editpot",pot:p})},el(Icon,{name:"edit-2",size:13})),
-              el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:()=>setModal({kind:"confirmdel",potId:p.id,potLabel:p.label})},el(Icon,{name:"trash-2",size:13})))),
-          el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
-          pct!==null && el(React.Fragment,null,
-            el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
-            el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"#8a94a6"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
-          thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
-          el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:()=>setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color})},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
-      })),
-      (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
-        el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
-        data.deposits.map(d=>{const p=pots.find(x=>x.id===d.potId);return el("div",{key:d.id,style:S.itemRow},
-          el("span",{style:{...S.itemDot,background:(p&&p.color)||"#ccc"}}),
-          el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-          el("span",{style:{...S.itemAmount,color:(p&&p.color)||"#8a94a6"}},fmt(d.amount)),
-          el("button",{style:S.delBtn,onClick:()=>delDeposit(d.id)},el(Icon,{name:"trash-2",size:13})));}))),
+    tab==="epargne" && el(React.Fragment,null,
+      // Cagnottes
+      el("div",{style:S.section},
+        el("div",{style:S.sectionHead},
+          el("span",{style:S.sectionTitle},el("span",{style:{color:"#1D8BCE",display:"flex"}},el(Icon,{name:"piggy-bank",size:16,color:"#1D8BCE"}))," Cagnottes"),
+          el("button",{style:{...S.smallBtn,color:"#1D8BCE",background:"#1D8BCE14"},onClick:()=>setModal({kind:"newpot"})},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Cagnotte")),
+        pots.length===0 && el("p",{style:S.blockHint},"Crée une cagnotte. Tu peux indiquer un solde de départ si tu as déjà de l'épargne."),
+        el("div",{style:S.potList}, pots.map(function(p){
+          var bal=potBalance(p.id);
+          var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
+          var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
+          return el("div",{key:p.id,style:S.potCard},
+            el("div",{style:S.potTop},
+              el("span",{style:{display:"flex",alignItems:"center",gap:9}},el(Icon,{name:"piggy-bank",size:16,color:p.color}),el("strong",{style:{fontSize:14}},p.label)),
+              el("div",{style:{display:"flex",gap:4}},
+                el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
+                el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
+            el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
+            p.startBalance>0 && el("div",{style:{fontSize:11,color:"#a8b0bf",marginTop:2}},"dont "+fmt(p.startBalance)+" de départ"),
+            pct!==null && el(React.Fragment,null,
+              el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
+              el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"#8a94a6"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
+            thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
+            el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
+        })),
+        (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
+          el("div",{style:S.depHead},"Versements de "+MONTHS_FR[month]),
+          data.deposits.map(function(d){var p=pots.find(function(x){return x.id===d.potId;});return el("div",{key:d.id,style:S.itemRow},
+            el("span",{style:{...S.itemDot,background:(p&&p.color)||"#ccc"}}),
+            el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
+            el("span",{style:{...S.itemAmount,color:(p&&p.color)||"#8a94a6"}},fmt(d.amount)),
+            el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13})));}))),
+
+      // Projets
+      el("div",{style:S.section},
+        el("div",{style:S.sectionHead},
+          el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
+          el("button",{style:{...S.smallBtn,color:"#945ECF",background:"#945ECF14"},onClick:()=>setModal({kind:"newproject"})},el(Icon,{name:"plus",size:14,color:"#945ECF"})," Projet")),
+        projects.length===0 && el("p",{style:S.blockHint},"Crée un projet (ex : Apport maison) avec un objectif et des cagnottes rattachées."),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:12}}, projects.map(function(proj){
+          var bal=projectBalance(proj);
+          var goal=proj.goal||0;
+          var pct=goal>0?Math.min(100,(bal/goal)*100):null;
+          var avg=avgMonthlySavings();
+          var remaining=goal-bal;
+          var estMonths=avg>0&&remaining>0?Math.ceil(remaining/avg):null;
+          var estDate=estMonths?new Date(now.getFullYear(),now.getMonth()+estMonths,1):null;
+          var reqMonthly=null;
+          if(proj.targetDate&&remaining>0){
+            var td=new Date(proj.targetDate);
+            var mLeft=(td.getFullYear()-now.getFullYear())*12+(td.getMonth()-now.getMonth());
+            if(mLeft>0) reqMonthly=Math.ceil(remaining/mLeft);
+          }
+          return el("div",{key:proj.id,style:S.projCard},
+            el("div",{style:S.potTop},
+              el("span",{style:{display:"flex",alignItems:"center",gap:9}},
+                el("span",{style:{width:12,height:12,borderRadius:3,background:proj.color||"#945ECF",flexShrink:0}}),
+                el("strong",{style:{fontSize:15}},proj.label)),
+              el("div",{style:{display:"flex",gap:4}},
+                el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editproject",proj:proj});}},el(Icon,{name:"edit-2",size:13})),
+                el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdelproj",projId:proj.id,projLabel:proj.label});}},el(Icon,{name:"trash-2",size:13})))),
+            el("div",{style:S.potBalRow},
+              el("span",{style:{fontSize:24,fontWeight:800,color:proj.color||"#945ECF",letterSpacing:"-0.5px"}},fmt(bal)),
+              goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(goal))),
+            pct!==null && el(React.Fragment,null,
+              el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:proj.color||"#945ECF"}})),
+              el("div",{style:S.potFoot},
+                el("span",{style:{color:proj.color||"#945ECF",fontWeight:600}},pct.toFixed(0)+"%"),
+                el("span",{style:{color:"#8a94a6"}},bal>=goal?"Objectif atteint 🎉":"reste "+fmt(remaining)))),
+            el("div",{style:S.projStats},
+              estDate && el("div",{style:S.projStat},
+                el("span",{style:{color:"#8a94a6",fontSize:11}},"Atteint vers"),
+                el("span",{style:{fontWeight:700,fontSize:12}},MONTHS_FR[estDate.getMonth()]+" "+estDate.getFullYear())),
+              reqMonthly && el("div",{style:S.projStat},
+                el("span",{style:{color:"#8a94a6",fontSize:11}},"Nécessaire / mois"),
+                el("span",{style:{fontWeight:700,fontSize:12,color:proj.color||"#945ECF"}},fmt(reqMonthly))),
+              (proj.linkedPotIds||[]).length>0 && el("div",{style:{fontSize:11,color:"#8a94a6",marginTop:4}},
+                "Cagnottes : "+(proj.linkedPotIds||[]).map(function(id){var p=pots.find(function(x){return x.id===id;});return p?p.label:"?";}).join(", "))));
+        })))),
 
     // ---- TAB GRAPHIQUES ----
     tab==="graphiques" && el(Charts,{months,pots,year,month,mk}),
@@ -194,9 +251,16 @@ function App(){
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
-      message:`Supprimer « ${modal.potLabel} » et tous ses versements ?`,
+      message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
       onClose:()=>setModal(null),
-      onConfirm:()=>{delPot(modal.potId);setModal(null);}})
+      onConfirm:()=>{delPot(modal.potId);setModal(null);}}),
+    (modal&&modal.kind==="newproject") && el(ProjectModal,{pots:pots,onClose:()=>setModal(null),onSave:function(p){addProject(p);setModal(null);}}),
+    (modal&&modal.kind==="editproject") && el(ProjectModal,{initial:modal.proj,pots:pots,onClose:()=>setModal(null),onSave:function(upd){editProject(modal.proj.id,upd);setModal(null);}}),
+    (modal&&modal.kind==="confirmdelproj") && el(ConfirmModal,{
+      title:"Supprimer le projet",
+      message:"Supprimer le projet « "+modal.projLabel+" » ?",
+      onClose:()=>setModal(null),
+      onConfirm:()=>{delProject(modal.projId);setModal(null);}})
   );
 }
 
@@ -337,13 +401,41 @@ function FastBlock({kind,cfg,items,onAmount,onDel,onRename,onAdd}){
 function PotModal({initial,onClose,onSave}){
   const [label,setLabel]=useState((initial&&initial.label)||"");
   const [goal,setGoal]=useState((initial&&initial.goal>0)?String(initial.goal):"");
+  const [startBalance,setStartBalance]=useState((initial&&initial.startBalance>0)?String(initial.startBalance):"");
   const [color,setColor]=useState((initial&&initial.color)||POT_PALETTE[0]);
-  const submit=()=>{if(!label)return;onSave({label,goal:parseFloat(goal)||0,color});};
+  const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,startBalance:parseFloat(startBalance)||0,color});};
   return el(Modal,{title:initial?"Modifier la cagnotte":"Nouvelle cagnotte",onClose},
-    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Apport maison, Vacances…",style:S.input,onChange:e=>setLabel(e.target.value)})),
-    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif (€) — optionnel"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"Vide = cagnotte libre",style:S.input,onChange:e=>setGoal(e.target.value)})),
-    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(c=>el("button",{key:c,onClick:()=>setColor(c),style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid #1a1d29":"2px solid #e8ebf0",cursor:"pointer"}})))),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Vacances, Voiture…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Solde de départ (€) — épargne déjà constituée"),el("input",{type:"number",inputMode:"decimal",value:startBalance,placeholder:"0",style:S.input,onChange:function(e){setStartBalance(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif (€) — optionnel"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"Vide = cagnotte libre",style:S.input,onChange:function(e){setGoal(e.target.value);}})),
+    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid #1a1d29":"2px solid #e8ebf0",cursor:"pointer"}});}))),
     el("button",{style:S.saveBtn,onClick:submit},initial?"Enregistrer":"Créer la cagnotte"));
+}
+
+function ProjectModal({initial,pots,onClose,onSave}){
+  const [label,setLabel]=useState((initial&&initial.label)||"");
+  const [goal,setGoal]=useState((initial&&initial.goal>0)?String(initial.goal):"");
+  const [initialAmount,setInitialAmount]=useState((initial&&initial.initialAmount>0)?String(initial.initialAmount):"");
+  const [targetDate,setTargetDate]=useState((initial&&initial.targetDate)||"");
+  const [color,setColor]=useState((initial&&initial.color)||"#945ECF");
+  const [linkedPotIds,setLinkedPotIds]=useState((initial&&initial.linkedPotIds)||[]);
+  const togglePot=function(id){setLinkedPotIds(function(prev){return prev.indexOf(id)>=0?prev.filter(function(x){return x!==id;}):[...prev,id];});};
+  const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,initialAmount:parseFloat(initialAmount)||0,targetDate:targetDate,color:color,linkedPotIds:linkedPotIds});};
+  return el(Modal,{title:initial?"Modifier le projet":"Nouveau projet",onClose},
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom du projet"),el("input",{value:label,autoFocus:true,placeholder:"ex : Apport maison, Voyage…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif total (€)"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"ex : 40000",style:S.input,onChange:function(e){setGoal(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Épargne déjà constituée (€)"),el("input",{type:"number",inputMode:"decimal",value:initialAmount,placeholder:"0",style:S.input,onChange:function(e){setInitialAmount(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Date cible (optionnel)"),el("input",{type:"month",value:targetDate,style:S.input,onChange:function(e){setTargetDate(e.target.value);}})),
+    pots.length>0 && el("div",{style:{marginBottom:14}},
+      el("label",{style:S.fieldLabel},"Cagnottes rattachées"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:6}},pots.map(function(p){
+        var checked=linkedPotIds.indexOf(p.id)>=0;
+        return el("label",{key:p.id,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,background:checked?p.color+"18":"#f7f9fc",cursor:"pointer"}},
+          el("input",{type:"checkbox",checked:checked,onChange:function(){togglePot(p.id);},style:{accentColor:p.color,width:16,height:16}}),
+          el("span",{style:{fontSize:14,fontWeight:checked?700:400,color:checked?p.color:"#5a6478"}},p.label));
+      }))),
+    el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid #1a1d29":"2px solid #e8ebf0",cursor:"pointer"}});}))),
+    el("button",{style:S.saveBtn,onClick:submit},initial?"Enregistrer":"Créer le projet"));
 }
 
 function DepositModal({pot,maxSuggest,onClose,onSave}){
@@ -421,6 +513,9 @@ const S = {
   potBarFill:{height:"100%",borderRadius:5,transition:"width .4s ease"},
   potFoot:{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6},
   potMonthTag:{fontSize:11.5,color:"#19A979",fontWeight:600,marginTop:8},
+  projCard:{background:"#f7f9fc",borderRadius:16,padding:16,border:"1.5px solid #e8ebf0"},
+  projStats:{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"},
+  projStat:{display:"flex",flexDirection:"column",gap:2,background:"#fff",borderRadius:9,padding:"8px 12px",flex:1},
   depositBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:5,width:"100%",marginTop:10,padding:"9px",borderRadius:10,border:"1.5px solid",background:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"},
   depHead:{fontSize:12,fontWeight:700,color:"#8a94a6",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6},
   itemRow:{display:"flex",alignItems:"center",gap:11,padding:"10px 4px",borderBottom:"1px solid #f4f6fa"},
