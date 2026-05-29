@@ -250,6 +250,17 @@ function App(){
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
               el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
             thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
+            el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
+            (function(){
+              var potKeys=Object.keys(months).sort();
+              var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
+              var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
+              var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
+              if(potAvg===0&&!mToGoal) return null;
+              return el("div",{style:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}},
+                potAvg>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:"var(--surface-3)",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:"var(--text-2)",fontWeight:600}},fmt(potAvg)),"/mois en moy."),
+                mToGoal!=null&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:p.color+"14",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:p.color,fontWeight:700}},mToGoal>0?"~"+mToGoal+" mois":"Atteint"),mToGoal>0?" pour finir":""));
+            })(),
             el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
         })),
         (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
@@ -424,6 +435,34 @@ function Switch({on,onToggle,color}){
   return el("button",{onClick:onToggle,style:{width:46,height:28,borderRadius:14,border:"none",cursor:"pointer",padding:0,position:"relative",
       background:on?(color||"#19A979"):"var(--border-3)",transition:"background .2s"}},
     el("span",{style:{position:"absolute",top:3,left:on?21:3,width:22,height:22,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.3)",transition:"left .2s"}}));
+}
+
+// ---- Sparkline par cagnotte ----
+function PotSparkline({months,potId,year,month,color}){
+  var ABBR=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+  var bars=[];
+  for(var i=5;i>=0;i--){
+    var d=new Date(year,month-i,1);
+    var k=monthKey(d.getFullYear(),d.getMonth());
+    var m=months[k];
+    var t=m?(m.deposits||[]).filter(function(dep){return dep.potId===potId;}).reduce(function(a,dep){return a+dep.amount;},0):0;
+    bars.push({label:ABBR[d.getMonth()],value:t,current:i===0});
+  }
+  var maxVal=Math.max.apply(null,bars.map(function(b){return b.value;}));
+  if(maxVal===0) return null;
+  var W=200,H=40,barW=22,gap=Math.floor((W-barW*6)/7);
+  return el("div",{style:{marginTop:12}},
+    el("div",{style:{fontSize:10,color:"var(--text-4)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:5}},"Versements · 6 mois"),
+    el("svg",{viewBox:"0 0 "+W+" "+(H+14),style:{width:"100%",overflow:"visible"}},
+      bars.map(function(b,i){
+        var x=gap+i*(barW+gap);
+        var h=Math.max(2,(b.value/maxVal)*(H-6));
+        var fillColor=b.current?color:(color+"88");
+        return el("g",{key:i},
+          el("rect",{x:x,y:H-h,width:barW,height:h,rx:3,fill:b.value>0?fillColor:"var(--border-3)",opacity:b.value>0?1:0.35}),
+          b.value>0&&el("text",{x:x+barW/2,y:H-h-3,textAnchor:"middle",fontSize:7.5,fill:color,fontWeight:700},b.value>=1000?Math.round(b.value/100)/10+"k":b.value),
+          el("text",{x:x+barW/2,y:H+12,textAnchor:"middle",fontSize:8,fill:"var(--text-4)"},b.label));
+      })));
 }
 
 // ---- Résumé épargne ----
