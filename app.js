@@ -97,6 +97,14 @@ const SECTIONS = {
   excep:    { title:"Dépenses exceptionnelles", icon:"zap",    accent:"#945ECF", sign:"−" },
 };
 const POT_PALETTE = ["#19A979","#1D8BCE","#E8743B","#945ECF","#13A4B4","#C8516C","#F2B53C","#6C8893"];
+const POT_TYPES = {
+  livret: {label:"Livret (A / LDDS / LEP)",  badge:"Livret", icon:"wallet",    hint:"Épargne liquide, défiscalisée",          plafond:22950,  color:"#1D8BCE"},
+  pea:    {label:"PEA",                       badge:"PEA",    icon:"bar-chart", hint:"Actions, exonéré d'impôts après 5 ans",  plafond:150000, color:"#19A979"},
+  av:     {label:"Assurance vie",             badge:"AV",     icon:"target",    hint:"Polyvalent, avantage fiscal après 8 ans", plafond:null,   color:"#945ECF"},
+  immo:   {label:"Immobilier",                badge:"Immo",   icon:"house",     hint:"Résidence principale, locatif…",         plafond:null,   color:"#E8743B"},
+  courant:{label:"Compte courant / liquidités",badge:"Courant",icon:"coins",    hint:"Cash disponible sur compte",             plafond:null,   color:"#F2B53C"},
+  autre:  {label:"Autre / non catégorisé",    badge:"Autre",  icon:"piggy-bank",hint:"",                                      plafond:null,   color:"#6C8893"},
+};
 const THEME_KEY = "budget-foyer-theme";
 const THEME_ORDER = ["auto","clair","sombre"];
 const THEME_ATTR = {auto:"auto",clair:"light",sombre:"dark"};
@@ -237,19 +245,35 @@ function App(){
           var bal=potBalance(p.id);
           var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
           var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
+          var pt=p.type&&POT_TYPES[p.type]?POT_TYPES[p.type]:null;
           return el("div",{key:p.id,style:S.potCard},
             el("div",{style:S.potTop},
-              el("span",{style:{display:"flex",alignItems:"center",gap:9}},el(Icon,{name:"piggy-bank",size:16,color:p.color}),el("strong",{style:{fontSize:14}},p.label)),
+              el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
+                el(Icon,{name:pt?pt.icon:"piggy-bank",size:16,color:p.color}),
+                el("strong",{style:{fontSize:14}},p.label),
+                pt&&el("span",{style:{fontSize:10,fontWeight:700,background:p.color+"22",color:p.color,borderRadius:6,padding:"2px 7px"}},pt.badge)),
               el("div",{style:{display:"flex",gap:4}},
                 el("button",{style:S.delBtn,title:"Historique",onClick:function(){setModal({kind:"history",pot:p});}},el(Icon,{name:"clock",size:13})),
                 el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
                 el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
             el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
             p.startBalance>0 && el("div",{style:{fontSize:11,color:"var(--text-4)",marginTop:2}},"dont "+fmt(p.startBalance)+" de départ"),
+            (pt&&pt.plafond&&bal>=pt.plafond*0.9) && el("div",{style:{fontSize:11,color:"#E8743B",fontWeight:600,marginTop:4,display:"flex",alignItems:"center",gap:4}},el(Icon,{name:"zap",size:11,color:"#E8743B"}),"Plafond "+pt.badge+" bientôt atteint ("+fmt(pt.plafond)+")"),
             pct!==null && el(React.Fragment,null,
               el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
               el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
             thisMonth>0 && el("div",{style:S.potMonthTag},"+ "+fmt(thisMonth)+" ce mois"),
+            el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
+            (function(){
+              var potKeys=Object.keys(months).sort();
+              var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
+              var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
+              var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
+              if(potAvg===0&&!mToGoal) return null;
+              return el("div",{style:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}},
+                potAvg>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:"var(--surface-3)",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:"var(--text-2)",fontWeight:600}},fmt(potAvg)),"/mois en moy."),
+                mToGoal!=null&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:p.color+"14",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:p.color,fontWeight:700}},mToGoal>0?"~"+mToGoal+" mois":"Atteint"),mToGoal>0?" pour finir":""));
+            })(),
             el("button",{style:{...S.depositBtn,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser ce mois"));
         })),
         (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
@@ -263,7 +287,7 @@ function App(){
     // ---- TAB PROJETS ----
     tab==="projets" && el(React.Fragment,null,
       el(ProjectionControls,{advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
-      advisorMode && el(ConseilCard,{profile:profile,total:pots.reduce(function(s,p){return s+potBalance(p.id);},0),monthlyExpenses:avgMonthlyExpenses(),annualReturn:annualReturn,setAnnualReturn:setAnnualReturn,onEditProfile:function(){setModal({kind:"profile"});}}),
+      advisorMode && el(ConseilCard,{profile:profile,pots:pots,potBalance:potBalance,total:pots.reduce(function(s,p){return s+potBalance(p.id);},0),monthlyExpenses:avgMonthlyExpenses(),annualReturn:annualReturn,setAnnualReturn:setAnnualReturn,onEditProfile:function(){setModal({kind:"profile"});}}),
       el("div",{style:S.section},
         el("div",{style:S.sectionHead},
           el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
@@ -426,22 +450,63 @@ function Switch({on,onToggle,color}){
     el("span",{style:{position:"absolute",top:3,left:on?21:3,width:22,height:22,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.3)",transition:"left .2s"}}));
 }
 
+// ---- Sparkline par cagnotte ----
+function PotSparkline({months,potId,year,month,color}){
+  var ABBR=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+  var bars=[];
+  for(var i=5;i>=0;i--){
+    var d=new Date(year,month-i,1);
+    var k=monthKey(d.getFullYear(),d.getMonth());
+    var m=months[k];
+    var t=m?(m.deposits||[]).filter(function(dep){return dep.potId===potId;}).reduce(function(a,dep){return a+dep.amount;},0):0;
+    bars.push({label:ABBR[d.getMonth()],value:t,current:i===0});
+  }
+  var maxVal=Math.max.apply(null,bars.map(function(b){return b.value;}));
+  if(maxVal===0) return null;
+  var W=200,H=40,barW=22,gap=Math.floor((W-barW*6)/7);
+  return el("div",{style:{marginTop:12}},
+    el("div",{style:{fontSize:10,color:"var(--text-4)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:5}},"Versements · 6 mois"),
+    el("svg",{viewBox:"0 0 "+W+" "+(H+14),style:{width:"100%",overflow:"visible"}},
+      bars.map(function(b,i){
+        var x=gap+i*(barW+gap);
+        var h=Math.max(2,(b.value/maxVal)*(H-6));
+        var fillColor=b.current?color:(color+"88");
+        return el("g",{key:i},
+          el("rect",{x:x,y:H-h,width:barW,height:h,rx:3,fill:b.value>0?fillColor:"var(--border-3)",opacity:b.value>0?1:0.35}),
+          b.value>0&&el("text",{x:x+barW/2,y:H-h-3,textAnchor:"middle",fontSize:7.5,fill:color,fontWeight:700},b.value>=1000?Math.round(b.value/100)/10+"k":b.value),
+          el("text",{x:x+barW/2,y:H+12,textAnchor:"middle",fontSize:8,fill:"var(--text-4)"},b.label));
+      })));
+}
+
 // ---- Résumé épargne ----
 function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved}){
   var total=pots.reduce(function(s,p){return s+potBalance(p.id);},0);
   var parts=pots.map(function(p){return {label:p.label,color:p.color,val:potBalance(p.id)};}).filter(function(x){return x.val>0;});
+  // regrouper par type de compte
+  var byType={};
+  pots.forEach(function(p){var t=p.type||"autre";if(!byType[t])byType[t]=0;byType[t]+=potBalance(p.id);});
+  var typeKeys=Object.keys(byType).filter(function(k){return byType[k]>0;}).sort(function(a,b){return byType[b]-byType[a];});
   return el("div",{style:{...S.section,background:"linear-gradient(135deg,#1D8BCE,#13A4B4)",color:"#fff"}},
-    el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Épargne totale"),
+    el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Patrimoine épargne"),
     el("div",{style:{fontSize:34,fontWeight:800,letterSpacing:"-1px",margin:"2px 0 14px"}},fmt(total)),
-    el("div",{style:{display:"flex",gap:10,marginBottom:parts.length?14:0}},
+    el("div",{style:{display:"flex",gap:10,marginBottom:14}},
       el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Rythme moyen"),el("div",{style:S.patStatVal},fmt(avgMonthly)+" /mois")),
       el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Épargné ce mois"),el("div",{style:S.patStatVal},fmt(thisMonthSaved)))),
     parts.length>0 && el(React.Fragment,null,
       el("div",{style:{display:"flex",height:10,borderRadius:6,overflow:"hidden",marginBottom:10}},
         parts.map(function(x,i){return el("div",{key:i,style:{width:(x.val/total*100)+"%",background:x.color}});})),
-      el("div",{style:{display:"flex",flexWrap:"wrap",gap:"6px 14px"}},
-        parts.map(function(x,i){return el("span",{key:i,style:{display:"flex",alignItems:"center",gap:5,fontSize:11.5,opacity:.95}},
-          el("span",{style:{width:8,height:8,borderRadius:"50%",background:x.color}}),x.label+" "+(x.val/total*100).toFixed(0)+"%");}))));
+      typeKeys.length>1 && el("div",{style:{display:"flex",flexDirection:"column",gap:5,marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,.2)"}},
+        el("div",{style:{fontSize:10,fontWeight:700,opacity:.8,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:2}},"Par type de compte"),
+        typeKeys.map(function(k){
+          var t=POT_TYPES[k]||POT_TYPES.autre;
+          var v=byType[k];
+          return el("div",{key:k,style:{display:"flex",alignItems:"center",gap:8}},
+            el(Icon,{name:t.icon,size:12,color:"rgba(255,255,255,.8)"}),
+            el("span",{style:{flex:1,fontSize:12,opacity:.95}},t.badge),
+            el("div",{style:{height:5,borderRadius:3,background:"rgba(255,255,255,.35)",width:60,overflow:"hidden"}},
+              el("div",{style:{height:"100%",borderRadius:3,background:"rgba(255,255,255,.9)",width:(v/total*100)+"%"}})),
+            el("span",{style:{fontSize:12,fontWeight:700,minWidth:60,textAlign:"right"}},fmt(v)));
+        }))));
 }
 
 // ---- Réglages de projection (onglet Projets) ----
@@ -463,29 +528,35 @@ function ProjectionControls({advisorMode,setAdvisorMode,annualReturn,setAnnualRe
 }
 
 // ---- Conseil patrimonial : profil + répartition recommandée ----
-function ConseilCard({profile,total,monthlyExpenses,annualReturn,setAnnualReturn,onEditProfile}){
+function ConseilCard({profile,pots,potBalance,total,monthlyExpenses,annualReturn,setAnnualReturn,onEditProfile}){
   var r=RISK[profile.risk]||RISK.equilibre;
   var alloc=recommendedAllocation(total,profile.risk,profile.age,monthlyExpenses);
   var precautionPct=alloc.emergency>0?Math.min(100,(alloc.precaution/alloc.emergency)*100):100;
   var buckets=[
-    {label:"Précaution",color:"#1D8BCE",val:alloc.precaution,hint:"livret / cash"},
-    {label:"Sécurisé",color:"#19A979",val:alloc.securise,hint:"fonds €, obligations"},
-    {label:"Dynamique",color:"#E8743B",val:alloc.dynamique,hint:"actions, immo"},
+    {label:"Précaution",color:"#1D8BCE",val:alloc.precaution,hint:"livret / cash disponible"},
+    {label:"Sécurisé",color:"#19A979",val:alloc.securise,hint:"fonds €, AV, obligations"},
+    {label:"Dynamique",color:"#E8743B",val:alloc.dynamique,hint:"actions (PEA), immo"},
   ];
   var sumB=buckets.reduce(function(s,b){return s+b.val;},0)||1;
+  // types de comptes déjà ouverts
+  var typeSet={};
+  pots.forEach(function(p){typeSet[p.type||"autre"]=true;});
+  // tips contextuels
+  var tips=[];
+  if(total>0&&!typeSet.livret) tips.push({icon:"zap",color:"#1D8BCE",text:"Ouvre un Livret A : épargne défiscalisée et disponible immédiatement, idéal pour le matelas de précaution."});
+  if(typeSet.livret&&pots.filter(function(p){return p.type==="livret";}).reduce(function(s,p){return s+potBalance(p.id);},0)>20000) tips.push({icon:"zap",color:"#E8743B",text:"Ton Livret A approche du plafond (22 950 €). Pense à ouvrir un LDDS ou à investir le surplus."});
+  if(!typeSet.pea&&profile.horizon>=5&&r.stock>=50) tips.push({icon:"bar-chart",color:"#19A979",text:"Un PEA est adapté à ton profil (horizon "+profile.horizon+" ans). Actions défiscalisées après 5 ans, plafond 150 000 €."});
+  if(!typeSet.av&&total>15000) tips.push({icon:"target",color:"#945ECF",text:"Une assurance vie apporte diversification et avantage fiscal après 8 ans. Adapté pour épargne moyen terme."});
   return el("div",{style:S.section},
     el("div",{style:S.sectionHead},
       el("span",{style:S.sectionTitle},el(Icon,{name:"target",size:16,color:r.color})," Conseil patrimonial"),
       el("button",{style:{...S.smallBtn,color:r.color,background:r.color+"18"},onClick:onEditProfile},el(Icon,{name:"edit-2",size:13})," Mon profil")),
-    // résumé profil
     el("div",{style:{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"var(--text-2)",marginBottom:14}},
       el("span",{style:{fontWeight:700,color:r.color}},"Profil "+r.label),
       el("span",null,"· "+profile.age+" ans · horizon "+profile.horizon+" ans")),
-    // rendement suggéré
     el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:r.color+"12",borderRadius:11,padding:"10px 12px",marginBottom:14}},
       el("span",{style:{fontSize:12.5,color:"var(--text)"}},"Rendement attendu pour ce profil : ",el("strong",{style:{color:r.color}},r.ret+" %/an")),
       Math.abs(annualReturn-r.ret)>0.01 && el("button",{style:{border:"none",background:r.color,color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"},onClick:function(){setAnnualReturn(r.ret);}},"Appliquer")),
-    // répartition recommandée
     el("div",{style:{fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}},"Répartition recommandée"),
     total<=0 ? el("p",{style:S.blockHint},"Renseigne tes cagnottes pour voir la répartition conseillée de ton patrimoine.") :
     el(React.Fragment,null,
@@ -500,7 +571,12 @@ function ConseilCard({profile,total,monthlyExpenses,annualReturn,setAnnualReturn
         el("span",null,"Matelas de précaution ("+r.emo+" mois de dépenses)"),
         el("span",{style:{fontWeight:700,color:precautionPct>=100?"#19A979":"#E8743B"}},fmt(alloc.precaution)+" / "+fmt(alloc.emergency))),
       el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:precautionPct+"%",background:precautionPct>=100?"#19A979":"#E8743B"}})),
-      precautionPct<100 && el("div",{style:{marginTop:6,fontSize:11.5,color:"#E8743B",fontWeight:600}},"Priorité : compléter ton épargne de précaution avant d'investir.")));
+      precautionPct<100 && el("div",{style:{marginTop:6,fontSize:11.5,color:"#E8743B",fontWeight:600}},"Priorité : compléter ton épargne de précaution avant d'investir.")),
+    tips.length>0 && el("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border-2)",display:"flex",flexDirection:"column",gap:8}},
+      el("div",{style:{fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px"}},"À étudier"),
+      tips.map(function(tip,i){return el("div",{key:i,style:{display:"flex",alignItems:"flex-start",gap:9,background:tip.color+"0f",borderRadius:10,padding:"9px 11px"}},
+        el(Icon,{name:tip.icon,size:14,color:tip.color,style:{flexShrink:0,marginTop:1}}),
+        el("span",{style:{fontSize:12,color:"var(--text)",lineHeight:1.45}},tip.text));})));
 }
 
 // ---- Bilan annuel ----
@@ -685,10 +761,23 @@ function PotModal({initial,onClose,onSave}){
   const [label,setLabel]=useState((initial&&initial.label)||"");
   const [goal,setGoal]=useState((initial&&initial.goal>0)?String(initial.goal):"");
   const [startBalance,setStartBalance]=useState((initial&&initial.startBalance>0)?String(initial.startBalance):"");
-  const [color,setColor]=useState((initial&&initial.color)||POT_PALETTE[0]);
-  const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,startBalance:parseFloat(startBalance)||0,color});};
+  const [type,setType]=useState((initial&&initial.type)||"autre");
+  const [color,setColor]=useState((initial&&initial.color)||(POT_TYPES[(initial&&initial.type)||"autre"].color)||POT_PALETTE[0]);
+  const pickType=function(k){setType(k);setColor(POT_TYPES[k].color);};
+  const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,startBalance:parseFloat(startBalance)||0,color,type});};
   return el(Modal,{title:initial?"Modifier la cagnotte":"Nouvelle cagnotte",onClose},
-    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Vacances, Voiture…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Livret A, PEA Fortuneo…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},
+      el("label",{style:S.fieldLabel},"Type de compte"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+        Object.keys(POT_TYPES).map(function(k){
+          var t=POT_TYPES[k];var on=type===k;
+          return el("button",{key:k,onClick:function(){pickType(k);},
+            style:{display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"9px 12px",borderRadius:11,cursor:"pointer",border:on?("2px solid "+t.color):"1.5px solid var(--border)",background:on?t.color+"14":"var(--surface-2)"}},
+            el(Icon,{name:t.icon,size:14,color:on?t.color:"var(--text-3)"}),
+            el("span",null,
+              el("div",{style:{fontSize:13,fontWeight:700,color:on?t.color:"var(--text)"}},t.label),
+              t.hint&&el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:1}},t.hint+(t.plafond?" · plafond "+fmt(t.plafond):""))));}))),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Solde de départ (€) — épargne déjà constituée"),el("input",{type:"number",inputMode:"decimal",value:startBalance,placeholder:"0",style:S.input,onChange:function(e){setStartBalance(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif (€) — optionnel"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"Vide = cagnotte libre",style:S.input,onChange:function(e){setGoal(e.target.value);}})),
     el("div",{style:{marginBottom:18}},el("label",{style:S.fieldLabel},"Couleur"),el("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},POT_PALETTE.map(function(c){return el("button",{key:c,onClick:function(){setColor(c);},style:{width:30,height:30,borderRadius:8,background:c,border:color===c?"3px solid var(--text)":"2px solid var(--border)",cursor:"pointer"}});}))),
