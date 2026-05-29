@@ -2,8 +2,8 @@ const { useState, useEffect, useRef } = React;
 const el = React.createElement;
 
 // ---- Supabase ----
-const SUPABASE_URL = "https://slcmmbqdtsmvwhqdxzyu.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsY21tYnFkdHNtdndocWR4enl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjcxNjMsImV4cCI6MjA4OTAwMzE2M30.X77k4KhtUo85HJKPrGOREswfKfdVQwdQ-rOYtHm_WIw";
+const SUPABASE_URL = "https://pytwcfyblzcxwglfdgwy.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5dHdjZnlibHpjeHdnbGZkZ3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTU4MDAsImV4cCI6MjA5NTYzMTgwMH0.DyJnpsw7e20Wb_NJtZtwnObT7LkN2t6FrrxcCKE5w1g";
 const db = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 // ----- icônes SVG inline -----
