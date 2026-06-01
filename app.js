@@ -1734,13 +1734,22 @@ function Modal({title,children,onClose}){
 // ============================================================================
 // ---- OUTILS : simulateurs patrimoniaux ----
 // ============================================================================
+// Barème IR 2025 — revenus 2024 (source : article 197 CGI, LFI 2025)
 const IR_BRACKETS = [
-  {upTo:11294, rate:0},
-  {upTo:28797, rate:0.11},
-  {upTo:82341, rate:0.30},
-  {upTo:177106, rate:0.41},
+  {upTo:11497,  rate:0},
+  {upTo:29315,  rate:0.11},
+  {upTo:83823,  rate:0.30},
+  {upTo:180294, rate:0.41},
   {upTo:Infinity, rate:0.45},
 ];
+// Plafond avantage quotient familial 2024 : 1 791 € / demi-part (inchangé)
+var IR_PLAFOND_DEMI_PART = 1791;
+// Décote 2024 : célibataire si IR < 1 929 €, couple si IR < 3 191 €
+function irDecote(impotBrut, couple) {
+  if(couple){ if(impotBrut<3191) return Math.max(0, 1444 - 0.4525*impotBrut); }
+  else { if(impotBrut<1929) return Math.max(0, 873 - 0.4525*impotBrut); }
+  return 0;
+}
 function irParts(situation, enfants){
   var base = situation==="couple" ? 2 : 1;
   var e = enfants||0;
@@ -1872,47 +1881,110 @@ function GaugeBar(props){
       el("span",{style:{fontSize:11,fontWeight:700,color:currentZone.color}},currentZone.label)));
 }
 
+// ---- Calcul brut→net : vrais taux URSSAF/AGIRC-ARRCO 2025 ----
+// PMSS 2025 = 3 925 € / mois (source : arrêté du 19/12/2024)
+var PMSS = 3925;
+function calcSalaire(brutMens, cadre) {
+  var asg = brutMens * 0.9825; // assiette CSG/CRDS = 98.25% du brut
+  var t1 = Math.min(brutMens, PMSS);      // tranche 1 (≤ PMSS)
+  var t2 = Math.max(0, Math.min(brutMens, 8*PMSS) - PMSS); // tranche 2
+  // --- Cotisations salariales DÉDUCTIBLES de l'IR ---
+  var malad    = brutMens * 0.0040;  // Assurance maladie (0.40%)
+  var vieilP   = t1 * 0.0690;        // Vieillesse plafonnée (6.90%)
+  var vieilD   = brutMens * 0.0040;  // Vieillesse déplafonnée (0.40%)
+  var arrco1   = t1 * 0.0315;        // AGIRC-ARRCO T1 (3.15%)
+  var arrco2   = t2 * 0.0864;        // AGIRC-ARRCO T2 (8.64%)
+  var csgDed   = asg * 0.0680;       // CSG déductible (6.80%)
+  var prevoy   = cadre ? t1 * 0.0150 : 0; // Prévoyance cadre (~1.50%)
+  // --- Cotisations salariales NON déductibles de l'IR ---
+  var ceg1     = t1 * 0.0086;        // CEG T1 (0.86%)
+  var ceg2     = t2 * 0.0108;        // CEG T2 (1.08%)
+  var csgNonDed= asg * 0.0240;       // CSG non déductible (2.40%)
+  var crds     = asg * 0.0050;       // CRDS (0.50%)
+  var cet      = brutMens > 4*PMSS ? brutMens * 0.0014 : 0; // CET > 4 PMSS
+  var totalDed    = malad+vieilP+vieilD+arrco1+arrco2+csgDed+prevoy;
+  var totalNonDed = ceg1+ceg2+csgNonDed+crds+cet;
+  var totalCotis  = totalDed+totalNonDed;
+  var net = brutMens - totalCotis;
+  // Net imposable = brut - cotisations déductibles (les non-déd s'ajoutent au net imposable)
+  var netImposable = brutMens - totalDed;
+  // --- Charges patronales (estimation) ---
+  var malad_p   = brutMens * 0.1300;  // Maladie patronale (13%)
+  var vieilP_p  = t1 * 0.0855;        // Vieillesse plafonnée (8.55%)
+  var vieilD_p  = brutMens * 0.0190;  // Vieillesse déplafonnée (1.90%)
+  var famil_p   = brutMens * (brutMens < 3.5*1801.80 ? 0.0345 : 0.0525); // Alloc. familiales
+  var at_p      = brutMens * 0.0150;  // Accidents travail (taux moyen ~1.5%)
+  var arrco1_p  = t1 * 0.0472;        // AGIRC-ARRCO T1 (4.72%)
+  var arrco2_p  = t2 * 0.1295;        // AGIRC-ARRCO T2 (12.95%)
+  var ceg1_p    = t1 * 0.0129;        // CEG T1 (1.29%)
+  var ceg2_p    = t2 * 0.0162;        // CEG T2 (1.62%)
+  var chomage_p = brutMens * 0.0405;  // Chômage patronal (4.05%)
+  var autres_p  = brutMens * 0.0380;  // FNAL+formation+CSA+AGS+taxe apprentissage (~3.8%)
+  var prevoy_p  = cadre ? t1 * 0.0150 : 0;
+  var totalPatronat = malad_p+vieilP_p+vieilD_p+famil_p+at_p+arrco1_p+arrco2_p+ceg1_p+ceg2_p+chomage_p+autres_p+prevoy_p;
+  var coutEmployeur = brutMens + totalPatronat;
+  return {
+    net:net, netImposable:netImposable, coutEmployeur:coutEmployeur,
+    totalCotis:totalCotis, totalDed:totalDed, totalNonDed:totalNonDed,
+    totalPatronat:totalPatronat,
+    lignes:[
+      {cat:"Sécurité sociale",items:[
+        {n:"Assurance maladie",v:malad,taux:"0.40%"},
+        {n:"Vieillesse plafonnée (≤PMSS)",v:vieilP,taux:"6.90%"},
+        {n:"Vieillesse déplafonnée",v:vieilD,taux:"0.40%"}
+      ]},
+      {cat:"Retraite complémentaire",items:[
+        {n:"AGIRC-ARRCO T1 (≤PMSS)",v:arrco1,taux:"3.15%"},
+        {n:"AGIRC-ARRCO T2 (>PMSS)",v:arrco2,taux:"8.64%"},
+        {n:"CEG T1",v:ceg1,taux:"0.86%"},
+        {n:"CEG T2",v:ceg2,taux:"1.08%"}
+      ]},
+      {cat:"Prévoyance",items:cadre?[{n:"Prévoyance cadre (T1)",v:prevoy,taux:"1.50%"}]:[]},
+      {cat:"CSG / CRDS",items:[
+        {n:"CSG déductible IR",v:csgDed,taux:"6.80%",ded:true},
+        {n:"CSG non déductible IR",v:csgNonDed,taux:"2.40%",nondedMsg:true},
+        {n:"CRDS",v:crds,taux:"0.50%",nondedMsg:true}
+      ]}
+    ]
+  };
+}
+
 // ---- Simulateur : Salaire brut → net détaillé ----
 function SalaireSimulator({onBack}){
   const [brut,setBrut]=useState("");
-  const [periode,setPeriode]=useState("mois"); // "mois" | "an"
-  const [statut,setStatut]=useState("noncadre"); // "noncadre" | "cadre"
+  const [periode,setPeriode]=useState("mois");
+  const [statut,setStatut]=useState("noncadre");
   const [tauxPAS,setTauxPAS]=useState("");
-  const [tempsPlein,setTempsPlein]=useState(true);
+  const [showDetail,setShowDetail]=useState(false);
 
   var B=parseFloat(brut)||0;
   var brutMens=periode==="mois"?B:B/12;
-  var brutAn=brutMens*12;
+  var cadre=statut==="cadre";
+  var calc=brutMens>0?calcSalaire(brutMens,cadre):{net:0,netImposable:0,coutEmployeur:0,totalCotis:0,totalDed:0,totalNonDed:0,totalPatronat:0,lignes:[]};
 
-  // Taux de cotisations salariales moyens (estimation France 2025)
-  // Non-cadre ~22%, Cadre ~25% (tranche B, APEC, prévoyance cadre)
-  var tauxCot=statut==="cadre"?0.25:0.22;
-  var cotisations=brutMens*tauxCot;
-  var netAvantImpot=brutMens-cotisations;
-
-  // Net imposable ≈ net + CSG/CRDS non déductible (~2.9% du brut)
-  var csgNonDed=brutMens*0.029;
-  var netImposable=netAvantImpot+csgNonDed;
-
-  // Prélèvement à la source
   var pas=parseFloat(tauxPAS)||0;
-  var prelevement=netImposable*pas/100;
-  var netApresImpot=netAvantImpot-prelevement;
+  var prelevement=calc.netImposable*pas/100;
+  var netApresImpot=calc.net-prelevement;
+  var ratioNet=brutMens>0?(calc.net/brutMens)*100:0;
 
-  var coutEmployeur=brutMens*(statut==="cadre"?1.45:1.42); // charges patronales ~42-45%
-
-  var ratioNet=brutMens>0?(netAvantImpot/brutMens)*100:0;
-
-  var ligne=function(label,val,color,bold){
-    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"7px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
-      el("span",{style:{color:"var(--text-2)",fontWeight:bold?700:400}},label),
-      el("span",{style:{fontWeight:bold?800:600,color:color||"var(--text)"}},val));
+  var rowLigne=function(label,taux,val,light,nonded){
+    return el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"5px 0",borderBottom:"1px solid var(--border-2)"}},
+      el("div",null,
+        el("span",{style:{fontSize:13,color:light?"var(--text-3)":"var(--text-2)"}},label),
+        taux?el("span",{style:{fontSize:11,color:"var(--text-4)",marginLeft:6}},taux):null,
+        nonded?el("span",{style:{fontSize:10,color:"#E8743B",marginLeft:4,background:"#E8743B14",borderRadius:4,padding:"1px 5px"}},"non déd. IR"):null),
+      el("span",{style:{fontSize:13,fontWeight:600,color:"#C8516C",minWidth:70,textAlign:"right"}},val>0?("− "+fmt(val)):"—"));
+  };
+  var rowTotal=function(label,val,color){
+    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontWeight:800,fontSize:14.5,borderTop:"2px solid var(--border)"}},
+      el("span",{style:{color:"var(--text)"}},label),
+      el("span",{style:{color:color||"var(--text)"}},val));
   };
 
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Salaire brut → net"),
-    el(ToolInfo,{color:"#1D8BCE"},"Estime ton salaire net à partir du brut, avec le détail des cotisations. Les taux sont des moyennes : non-cadre ≈ 22 % de cotisations salariales, cadre ≈ 25 %. Renseigne ton taux de prélèvement à la source (sur ta fiche de paie) pour obtenir le net après impôt."),
+    el(ToolInfo,{color:"#1D8BCE"},"Calcul basé sur les taux officiels URSSAF & AGIRC-ARRCO 2025. Le PMSS 2025 est de 3 925 €/mois. Renseigne ton taux de prélèvement à la source (visible sur ta fiche de paie) pour voir ton net réel après impôt."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Salaire brut"),
       el("div",{style:{display:"flex",gap:10,marginBottom:12}},
@@ -1921,7 +1993,7 @@ function SalaireSimulator({onBack}){
           [["mois","/ mois"],["an","/ an"]].map(function(o){
             var on=periode===o[0];
             return el("button",{key:o[0],onClick:function(){setPeriode(o[0]);},
-              style:{flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13,cursor:"pointer"}},o[1]);
+              style:{flex:1,padding:"8px 2px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:12.5,cursor:"pointer"}},o[1]);
           }))),
       el("label",{style:S.fieldLabel},"Statut"),
       el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2,marginBottom:12}},
@@ -1930,23 +2002,61 @@ function SalaireSimulator({onBack}){
           return el("button",{key:o[0],onClick:function(){setStatut(o[0]);},
             style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
         })),
-      el("label",{style:S.fieldLabel},"Taux de prélèvement à la source (%) — optionnel"),
-      el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS,placeholder:"ex : 5.3",onChange:function(e){setTauxPAS(e.target.value);}})),
+      el("label",{style:S.fieldLabel},"Taux prélèvement à la source (%, optionnel)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS,placeholder:"visible sur ta fiche de paie — ex : 5.3",onChange:function(e){setTauxPAS(e.target.value);}})),
     B>0?el("div",{style:S.section},
-      el("div",{style:{textAlign:"center",marginBottom:16}},
-        el("div",{style:{fontSize:12,color:"var(--text-3)",marginBottom:4}},pas>0?"Net après impôt / mois":"Net avant impôt / mois"),
-        bigNumber(fmt(pas>0?netApresImpot:netAvantImpot),"#19A979"),
-        el("div",{style:{fontSize:13,color:"var(--text-3)",marginTop:4}},"soit "+fmt((pas>0?netApresImpot:netAvantImpot)*12)+" / an")),
-      ligne("Salaire brut",fmt(brutMens)),
-      ligne("− Cotisations salariales ("+Math.round(tauxCot*100)+"%)",fmt(-cotisations),"#C8516C"),
-      ligne("Net avant impôt",fmt(netAvantImpot),"#19A979",true),
-      pas>0?ligne("− Prélèvement à la source ("+pas+"%)",fmt(-prelevement),"#E8743B"):null,
-      pas>0?ligne("Net après impôt",fmt(netApresImpot),"#19A979",true):null,
-      el("div",{style:{display:"flex",gap:12,marginTop:16,flexWrap:"wrap"}},
-        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net imposable / mois"),el("div",{style:S.bilanVal},fmt(netImposable))),
-        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Part nette du brut"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},ratioNet.toFixed(0)+" %")),
-        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Coût employeur / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#945ECF"})},fmt(coutEmployeur)))),
-      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative. Les taux réels varient selon ta convention collective, ta mutuelle, les heures supplémentaires et les avantages. Référez-vous à votre fiche de paie pour les chiffres exacts.")):null);
+      el("div",{style:{display:"flex",gap:10,marginBottom:14}},
+        el("div",{style:{flex:1,background:"#19A97912",border:"1.5px solid #19A97940",borderRadius:14,padding:"12px 14px",textAlign:"center"}},
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:4}},pas>0?"Net après impôt":"Net avant impôt"),
+          el("div",{style:{fontSize:26,fontWeight:800,color:"#19A979"}},fmt(pas>0?netApresImpot:calc.net)),
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:3}},"par mois")),
+        el("div",{style:{flex:1,background:"var(--surface-2)",borderRadius:14,padding:"12px 14px",textAlign:"center"}},
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:4}},"Net imposable"),
+          el("div",{style:{fontSize:22,fontWeight:800,color:"var(--text)"}},fmt(calc.netImposable)),
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:3}},"à déclarer / mois"))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},"Salaire brut"),
+        el("span",{style:{fontWeight:700}},fmt(brutMens))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},"Cotisations salariales totales"),
+        el("span",{style:{fontWeight:700,color:"#C8516C"}},"− "+fmt(calc.totalCotis))),
+      pas>0?el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},"Prélèvement à la source ("+pas+"%)"),
+        el("span",{style:{fontWeight:700,color:"#E8743B"}},"− "+fmt(prelevement))):null,
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontWeight:800,fontSize:15,borderTop:"2px solid var(--border)"}},
+        el("span",null,pas>0?"Net après impôt":"Net avant impôt"),
+        el("span",{style:{color:"#19A979"}},fmt(pas>0?netApresImpot:calc.net))),
+      el("button",{onClick:function(){setShowDetail(!showDetail);},style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14",marginTop:10})},showDetail?"Masquer le détail des cotisations":"Voir le détail ligne par ligne"),
+      showDetail?el("div",{style:{marginTop:12}},
+        calc.lignes.map(function(cat){
+          if(!cat.items||cat.items.length===0) return null;
+          return el("div",{key:cat.cat,style:{marginBottom:10}},
+            el("div",{style:{fontSize:11,fontWeight:800,color:"var(--text-4)",textTransform:"uppercase",letterSpacing:"0.5px",padding:"6px 0 4px"}},"— "+cat.cat+" —"),
+            cat.items.map(function(it){
+              return it.v>0?rowLigne(it.n,it.taux,it.v,false,it.nondedMsg):null;
+            }));
+        }),
+        el("div",{style:{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,fontWeight:700,borderTop:"2px solid var(--border)",marginTop:6}},
+          el("span",{style:{color:"var(--text-2)"}},"dont déductibles IR"),
+          el("span",{style:{color:"#C8516C"}},fmt(calc.totalDed))),
+        el("div",{style:{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13,fontWeight:700,borderBottom:"1px solid var(--border-2)"}},
+          el("span",{style:{color:"var(--text-2)"}},"dont non déductibles IR"),
+          el("span",{style:{color:"#E8743B"}},fmt(calc.totalNonDed))),
+        el("div",{style:{background:"#1D8BCE0a",border:"1px solid #1D8BCE22",borderRadius:12,padding:"10px 14px",marginTop:12,fontSize:12.5,color:"var(--text-2)",lineHeight:1.6}},
+          "Le net imposable (",el("strong",null,fmt(calc.netImposable)),") est différent du net à payer (",el("strong",null,fmt(calc.net)),"). Pourquoi ? La CSG non-déductible (",fmt(calc.totalNonDed),") est prélevée mais reste dans ta base imposable. C'est ce montant que tu reportes en case 1AJ/1BJ de ta déclaration (après abattement 10 %)."),
+        el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
+        el("div",{style:{fontSize:12,fontWeight:700,color:"var(--text-3)",marginBottom:8}},"Charges patronales (estimation)"),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0"}},
+          el("span",{style:{color:"var(--text-3)"}},"Total charges patronales"),
+          el("span",{style:{fontWeight:700,color:"#945ECF"}},fmt(calc.totalPatronat))),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13.5,fontWeight:800,padding:"6px 0",borderTop:"2px solid var(--border)"}},
+          el("span",null,"Coût total employeur"),
+          el("span",{style:{color:"#945ECF"}},fmt(calc.coutEmployeur)))):null,
+      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Ratio net / brut"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},ratioNet.toFixed(1)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net imposable annuel"),el("div",{style:S.bilanVal},fmt(calc.netImposable*12))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Coût employeur / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#945ECF"})},fmt(calc.coutEmployeur)))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Taux URSSAF/AGIRC-ARRCO 2025. Hors mutuelle obligatoire, participation/intéressement, heures supplémentaires. Coût employeur estimé hors réduction Fillon (applicable pour les salaires < 1.6 SMIC). Source : URSSAF, legifrance.gouv.fr.")):null);
 }
 
 // ---- Simulateur 1 : Impôt sur le revenu ----
@@ -1974,15 +2084,18 @@ function IRSimulator({onBack}){
   var impotParts=Math.max(0,irTaxOnQuotient(quotient)*parts);
   var impotBase=Math.max(0,irTaxOnQuotient(partsBase>0?R/partsBase:0)*partsBase);
   var avantage=impotBase-impotParts;
-  var plafond=1791*demiPartsEnfants;
+  var plafond=IR_PLAFOND_DEMI_PART*demiPartsEnfants;
   var plafonne=false;
   var impotBrut=impotParts;
   if(demiPartsEnfants>0 && avantage>plafond){ impotBrut=impotBase-plafond; plafonne=true; }
+  // Décote (art. 197 CGI) — réduit l'impôt des petits contribuables
+  var decote=irDecote(impotBrut, couple);
+  var impotApresDecote=Math.max(0, impotBrut-decote);
   // Réductions
   var donsV=parseFloat(dons)||0;
   var donsBase=Math.min(donsV,R*0.2);
   var redDons=donsBase*0.66;
-  var reductions=Math.min(redDons,impotBrut);
+  var reductions=Math.min(redDons,impotApresDecote);
   // Crédits
   var domV=parseFloat(domicile)||0;
   var credDomicile=Math.min(domV,12000)*0.5;
@@ -1990,10 +2103,10 @@ function IRSimulator({onBack}){
   var gardeBase=Math.min(gardeV,3500*(gardeNb||0));
   var credGarde=gardeBase*0.5;
   var credits=credDomicile+credGarde;
-  var impotNet=impotBrut-reductions-credits;
-  var tauxMoyen=R>0?(impotBrut/R)*100:0;
+  var impotNet=Math.max(0,impotApresDecote-reductions-credits);
+  var tauxMoyen=R>0?(impotNet/R)*100:0;
   var tauxMarginal=irMarginalRate(quotient)*100;
-  var netMensuel=(R-Math.max(0,impotNet))/12;
+  var netMensuel=(R-impotNet)/12;
   var recapRow=function(label,val,color){
     return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:14}},
       el("span",{style:{color:"var(--text-2)"}},label),
@@ -2051,11 +2164,13 @@ function IRSimulator({onBack}){
       impotNet<0?el("div",{style:{fontSize:12.5,color:"#19A979",fontWeight:600,marginTop:4}},"Remboursement attendu"):null,
       plafonne?el("div",{style:{fontSize:12.5,color:"#E8743B",fontWeight:600,marginTop:8}},"Plafonnement du quotient familial appliqué (avantage limité à "+fmt(plafond)+")"):null,
       el("div",{style:{height:1,background:"var(--border-2)",margin:"14px 0"}}),
-      recapRow("Impôt brut",fmt(impotBrut)),
-      reductions>0?recapRow("− Réductions",fmt(-reductions),"#19A979"):null,
+      recapRow("Impôt sur le quotient",fmt(impotBrut)),
+      decote>0?recapRow("− Décote (art. 197 CGI)",fmt(-decote),"#19A979"):null,
+      decote>0?recapRow("Impôt après décote",fmt(impotApresDecote)):null,
+      reductions>0?recapRow("− Réductions (dons…)",fmt(-reductions),"#19A979"):null,
       credits>0?recapRow("− Crédits d'impôt",fmt(-credits),"#19A979"):null,
       el("div",{style:{height:1,background:"var(--border-2)",margin:"8px 0"}}),
-      recapRow("Impôt net",fmt(impotNet),impotNet<0?"#19A979":"#C8516C"),
+      recapRow("Impôt net à payer",fmt(impotNet),impotNet===0?"#19A979":"#C8516C"),
       el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux moyen"),el("div",{style:S.bilanVal},tauxMoyen.toFixed(1)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux marginal"),el("div",{style:S.bilanVal},tauxMarginal.toFixed(0)+" %")),
@@ -2091,8 +2206,8 @@ function IRSimulator({onBack}){
           el("tbody",null,(function(){
             var revImp=R>0?quotient:0;
             var rows2=[];
-            var bracketLabels=["0 → 11 294 €","11 295 → 28 797 €","28 798 → 82 341 €","82 342 → 177 106 €","Au-delà de 177 106 €"];
-            var bracketBounds=[0,11294,28797,82341,177106,Infinity];
+            var bracketLabels=["0 → 11 497 €","11 498 → 29 315 €","29 316 → 83 823 €","83 824 → 180 294 €","Au-delà de 180 294 €"];
+            var bracketBounds=[0,11497,29315,83823,180294,Infinity];
             for(var bi=0;bi<IR_BRACKETS.length;bi++){
               var bLow=bracketBounds[bi], bHigh=IR_BRACKETS[bi].upTo;
               var bRate=IR_BRACKETS[bi].rate;
