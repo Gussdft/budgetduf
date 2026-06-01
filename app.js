@@ -297,6 +297,74 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
     }));
 }
 
+function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,year,month,setModal,delDeposit,projects,projectBalance,annualReturn,advisorMode,setAdvisorMode,setAnnualReturn,profile,avgMonthlyExpenses,editProject}){
+  var [view,setView]=useState("cagnottes");
+  var segStyle=function(v){return {flex:1,padding:"8px 0",borderRadius:10,border:"none",background:view===v?"var(--glass-bg-strong)":"transparent",color:view===v?"var(--text)":"var(--text-3)",fontWeight:view===v?700:500,fontSize:14,cursor:"pointer",boxShadow:view===v?"0 1px 6px rgba(0,0,0,.1)":"none",transition:"all .2s"};};
+  return el(React.Fragment,null,
+    el("div",{style:{display:"flex",background:"var(--glass-bg)",borderRadius:14,padding:3,marginBottom:4,border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)"}},
+      el("button",{style:segStyle("cagnottes"),onClick:function(){setView("cagnottes");}},"Cagnottes"),
+      el("button",{style:segStyle("projets"),onClick:function(){setView("projets");}},"Projets")),
+    view==="cagnottes"&&el(React.Fragment,null,
+      el(PatrimoineCard,{pots:pots,potBalance:potBalance,avgMonthly:avgMonthlySavings(),thisMonthSaved:totalSaved}),
+      el("div",{style:S.section},
+        el("div",{style:S.sectionHead},
+          el("span",{style:S.sectionTitle},el("span",{style:{color:"#1D8BCE",display:"flex"}},el(Icon,{name:"piggy-bank",size:16,color:"#1D8BCE"}))," Cagnottes"),
+          el("button",{style:{...S.smallBtn,color:"#1D8BCE",background:"#1D8BCE14"},onClick:function(){setModal({kind:"newpot"});}},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Cagnotte")),
+        pots.length===0&&el("p",{style:S.blockHint},"Crée une cagnotte. Tu peux indiquer un solde de départ si tu as déjà de l'épargne."),
+        el("div",{style:S.potList},pots.map(function(p){
+          var bal=potBalance(p.id);
+          var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
+          var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
+          var pt=p.type&&POT_TYPES[p.type]?POT_TYPES[p.type]:null;
+          var potKeys=Object.keys(months).sort();
+          var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
+          var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
+          var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
+          var metaParts=[];
+          if(thisMonth!==0) metaParts.push(thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois");
+          if(potAvg>0) metaParts.push(fmt(potAvg)+"/mois en moy.");
+          if(mToGoal!=null&&mToGoal>0) metaParts.push("~"+mToGoal+" mois pour finir");
+          if(p.startBalance>0) metaParts.push("dont "+fmt(p.startBalance)+" de départ");
+          return el("div",{key:p.id,style:S.potCard},
+            el("div",{style:S.potTop},
+              el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
+                el(Icon,{name:pt?pt.icon:"piggy-bank",size:16,color:p.color}),
+                el("strong",{style:{fontSize:14}},p.label),
+                pt&&el("span",{style:{fontSize:10,fontWeight:700,background:p.color+"22",color:p.color,borderRadius:6,padding:"2px 7px"}},pt.badge)),
+              el("div",{style:{display:"flex",gap:4,marginLeft:"auto"}},
+                el("button",{style:S.delBtn,title:"Historique",onClick:function(){setModal({kind:"history",pot:p});}},el(Icon,{name:"clock",size:13})),
+                el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
+                el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
+            el("div",{style:S.potBalRow},el("span",{style:{fontSize:24,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
+            (pt&&pt.plafond&&bal>=pt.plafond*0.9)&&el("div",{style:{fontSize:11,color:"#E8743B",fontWeight:600,marginTop:4,display:"flex",alignItems:"center",gap:4}},el(Icon,{name:"zap",size:11,color:"#E8743B"}),"Plafond "+pt.badge+" bientôt atteint ("+fmt(pt.plafond)+")"),
+            pct!==null&&el(React.Fragment,null,
+              el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
+              el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
+            el("div",{style:{fontSize:10,color:"var(--text-4)",marginTop:10,marginBottom:2}},"6 derniers mois"),
+            el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
+            metaParts.length>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:8,lineHeight:1.5}},metaParts.join("  ·  ")),
+            el("div",{style:{display:"flex",gap:8,marginTop:12}},
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser"),
+              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:"#C8516C",borderColor:"#C8516C40"},onClick:function(){setModal({kind:"withdraw",potId:p.id,potLabel:p.label,color:p.color,balance:bal});}},el(Icon,{name:"arrow-right",size:14,color:"#C8516C",style:{transform:"rotate(90deg)"}})," Retirer")));
+        })),
+        (data.deposits||[]).length>0&&el(MonthMovements,{deposits:data.deposits,pots:pots,monthLabel:MONTHS_FR[month],delDeposit:delDeposit}))),
+    view==="projets"&&el(React.Fragment,null,
+      el(ProjectionControls,{advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
+      advisorMode&&el(ConseilCard,{profile:profile,pots:pots,potBalance:potBalance,total:pots.reduce(function(s,p){return s+potBalance(p.id);},0),monthlyExpenses:avgMonthlyExpenses(),annualReturn:annualReturn,setAnnualReturn:setAnnualReturn,onEditProfile:function(){setModal({kind:"profile"});}}),
+      el("div",{style:S.section},
+        el("div",{style:S.sectionHead},
+          el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
+          el("button",{style:{...S.smallBtn,color:"#945ECF",background:"#945ECF14"},onClick:function(){setModal({kind:"newproject"});}},el(Icon,{name:"plus",size:14,color:"#945ECF"})," Projet")),
+        projects.length===0&&el("p",{style:S.blockHint},"Crée un projet (ex : Apport maison) avec un objectif et des cagnottes rattachées."),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:14}},projects.map(function(proj){
+          return el(ProjectCard,{key:proj.id,proj:proj,balance:projectBalance(proj),pots:pots,
+            avgMonthly:avgMonthlySavings(),annualReturn:annualReturn,advisorMode:advisorMode,
+            onEdit:function(){setModal({kind:"editproject",proj:proj});},
+            onDelete:function(){setModal({kind:"confirmdelproj",projId:proj.id,projLabel:proj.label});},
+            onContribution:function(v){editProject(proj.id,{monthlyContribution:v});}});
+        })))));
+}
+
 // ----------------------------------------------------------------------------
 function App(){
   const now = new Date();
@@ -495,74 +563,15 @@ function App(){
         onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
 
     // ---- TAB ÉPARGNE (cagnottes) ----
-    tab==="epargne" && el(React.Fragment,null,
-      // Résumé épargne
-      el(PatrimoineCard,{pots:pots,potBalance:potBalance,avgMonthly:avgMonthlySavings(),thisMonthSaved:totalSaved}),
-      // Cagnottes
-      el("div",{style:S.section},
-        el("div",{style:S.sectionHead},
-          el("span",{style:S.sectionTitle},el("span",{style:{color:"#1D8BCE",display:"flex"}},el(Icon,{name:"piggy-bank",size:16,color:"#1D8BCE"}))," Cagnottes"),
-          el("button",{style:{...S.smallBtn,color:"#1D8BCE",background:"#1D8BCE14"},onClick:()=>setModal({kind:"newpot"})},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Cagnotte")),
-        pots.length===0 && el("p",{style:S.blockHint},"Crée une cagnotte. Tu peux indiquer un solde de départ si tu as déjà de l'épargne."),
-        el("div",{style:S.potList}, pots.map(function(p){
-          var bal=potBalance(p.id);
-          var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
-          var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
-          var pt=p.type&&POT_TYPES[p.type]?POT_TYPES[p.type]:null;
-          var potKeys=Object.keys(months).sort();
-          var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
-          var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
-          var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
-          var metaParts=[];
-          if(thisMonth!==0) metaParts.push(thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois");
-          if(potAvg>0) metaParts.push(fmt(potAvg)+"/mois en moy.");
-          if(mToGoal!=null&&mToGoal>0) metaParts.push("~"+mToGoal+" mois pour finir");
-          if(p.startBalance>0) metaParts.push("dont "+fmt(p.startBalance)+" de départ");
-          return el("div",{key:p.id,style:S.potCard},
-            el("div",{style:S.potTop},
-              el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
-                el(Icon,{name:pt?pt.icon:"piggy-bank",size:16,color:p.color}),
-                el("strong",{style:{fontSize:14}},p.label),
-                pt&&el("span",{style:{fontSize:10,fontWeight:700,background:p.color+"22",color:p.color,borderRadius:6,padding:"2px 7px"}},pt.badge)),
-              el("div",{style:{display:"flex",gap:4,marginLeft:"auto"}},
-                el("button",{style:S.delBtn,title:"Historique",onClick:function(){setModal({kind:"history",pot:p});}},el(Icon,{name:"clock",size:13})),
-                el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
-                el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
-            el("div",{style:{...S.potBalRow,marginTop:6}},el("span",{style:{fontSize:24,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
-            (pt&&pt.plafond&&bal>=pt.plafond*0.9) && el("div",{style:{fontSize:11,color:"#E8743B",fontWeight:600,marginTop:4,display:"flex",alignItems:"center",gap:4}},el(Icon,{name:"zap",size:11,color:"#E8743B"}),"Plafond "+pt.badge+" bientôt atteint ("+fmt(pt.plafond)+")"),
-            pct!==null && el(React.Fragment,null,
-              el("div",{style:{...S.potBarTrack,marginTop:12}},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
-              el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
-            el("div",{style:{fontSize:10,color:"var(--text-4)",marginTop:10,marginBottom:2}},"6 derniers mois"),
-            el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
-            metaParts.length>0 && el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:8,lineHeight:1.5}},metaParts.join("  ·  ")),
-            el("div",{style:{display:"flex",gap:8,marginTop:12}},
-              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser"),
-              el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:"#C8516C",borderColor:"#C8516C40"},onClick:function(){setModal({kind:"withdraw",potId:p.id,potLabel:p.label,color:p.color,balance:bal});}},el(Icon,{name:"arrow-right",size:14,color:"#C8516C",style:{transform:"rotate(90deg)"}})," Retirer")));
-        })),
-        (data.deposits||[]).length>0 && el(MonthMovements,{deposits:data.deposits,pots:pots,monthLabel:MONTHS_FR[month],delDeposit:delDeposit}))),
-
-    // ---- TAB PROJETS ----
-    tab==="projets" && el(React.Fragment,null,
-      el(ProjectionControls,{advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,annualReturn:annualReturn,setAnnualReturn:setAnnualReturn}),
-      advisorMode && el(ConseilCard,{profile:profile,pots:pots,potBalance:potBalance,total:pots.reduce(function(s,p){return s+potBalance(p.id);},0),monthlyExpenses:avgMonthlyExpenses(),annualReturn:annualReturn,setAnnualReturn:setAnnualReturn,onEditProfile:function(){setModal({kind:"profile"});}}),
-      el("div",{style:S.section},
-        el("div",{style:S.sectionHead},
-          el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"target",size:16,color:"#945ECF"}))," Projets"),
-          el("button",{style:{...S.smallBtn,color:"#945ECF",background:"#945ECF14"},onClick:()=>setModal({kind:"newproject"})},el(Icon,{name:"plus",size:14,color:"#945ECF"})," Projet")),
-        projects.length===0 && el("p",{style:S.blockHint},"Crée un projet (ex : Apport maison) avec un objectif et des cagnottes rattachées."),
-        el("div",{style:{display:"flex",flexDirection:"column",gap:14}}, projects.map(function(proj){
-          return el(ProjectCard,{key:proj.id,proj:proj,balance:projectBalance(proj),pots:pots,
-            avgMonthly:avgMonthlySavings(),annualReturn:annualReturn,advisorMode:advisorMode,
-            onEdit:function(){setModal({kind:"editproject",proj:proj});},
-            onDelete:function(){setModal({kind:"confirmdelproj",projId:proj.id,projLabel:proj.label});},
-            onContribution:function(v){editProject(proj.id,{monthlyContribution:v});}});
-        })))),
-
-    // ---- TAB GRAPHIQUES ----
-    tab==="graphiques" && el(React.Fragment,null,
-      el(AnnualReview,{months:months,year:year}),
-      el(Charts,{months,pots,year,month,mk})),
+    tab==="epargne" && el(EpargnePanel,{
+      pots:pots,potBalance:potBalance,avgMonthlySavings:avgMonthlySavings,
+      totalSaved:totalSaved,data:data,months:months,year:year,month:month,
+      setModal:setModal,delDeposit:delDeposit,
+      projects:projects,projectBalance:projectBalance,annualReturn:annualReturn,
+      advisorMode:advisorMode,setAdvisorMode:setAdvisorMode,setAnnualReturn:setAnnualReturn,
+      profile:profile,avgMonthlyExpenses:avgMonthlyExpenses,editProject:editProject,
+      potHistory:potHistory,
+    }),
 
     // ---- TAB OUTILS ----
     tab==="outils" && el(OutilsScreen,null),
@@ -581,7 +590,7 @@ function App(){
 
     // ---- barre d'onglets en bas (style iOS) ----
     el("nav",{style:S.tabBar},
-      [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
+      [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
           el("span",{style:{display:"flex",transform:on?"translateY(-1px) scale(1.06)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
@@ -2040,19 +2049,19 @@ function DashboardScreen(props){
 
 // ----------------------------------------------------------------------------
 const S = {
-  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))"},
+  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"var(--bg-gradient)"},
   header:{display:"flex",alignItems:"center",justifyContent:"space-between"},
   logo:{width:42,height:42,borderRadius:13,background:"linear-gradient(135deg,#1D8BCE,#19A979)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(29,139,206,.35)"},
   title:{margin:0,fontSize:26,fontWeight:800,letterSpacing:"-0.6px"},
   subtitle:{margin:0,fontSize:12,color:"var(--text-3)"},
-  iconBtn:{width:38,height:38,borderRadius:10,border:"none",background:"var(--surface)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text-2)",boxShadow:"var(--shadow)"},
-  tabBar:{position:"fixed",left:0,right:0,bottom:0,zIndex:90,display:"flex",justifyContent:"space-around",background:"var(--tabbar-bg)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)",borderTop:"0.5px solid var(--tabbar-border)",padding:"8px 8px calc(8px + env(safe-area-inset-bottom))"},
-  tabBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,border:"none",background:"transparent",cursor:"pointer",padding:"4px 0",color:"var(--text-3)",maxWidth:120},
+  iconBtn:{width:38,height:38,borderRadius:12,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text-2)"},
+  tabBar:{position:"fixed",left:0,right:0,bottom:0,zIndex:90,display:"flex",justifyContent:"space-around",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(30px)",backdropFilter:"blur(30px)",borderTop:"0.5px solid var(--glass-border)",padding:"10px 8px calc(10px + env(safe-area-inset-bottom))",boxShadow:"0 -1px 0 var(--glass-border)"},
+  tabBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,border:"none",background:"transparent",cursor:"pointer",padding:"4px 0",color:"var(--text-3)",maxWidth:120},
   tabActive:{color:"#1D8BCE"},
-  monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"var(--surface)",borderRadius:14,padding:8,boxShadow:"var(--shadow)"},
-  navBtn:{width:34,height:34,borderRadius:9,border:"none",background:"var(--surface-3)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-2)"},
+  monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"var(--glass-bg)",borderRadius:16,padding:10,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
+  navBtn:{width:36,height:36,borderRadius:11,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-2)"},
   monthLabel:{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center"},
-  flowCard:{background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"},
+  flowCard:{background:"var(--glass-bg)",borderRadius:22,padding:20,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
   flowRow:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"},
   flowLabel:{display:"flex",alignItems:"center",gap:8,fontSize:14,color:"var(--text-2)",fontWeight:500},
   flowVal:{fontSize:16,fontWeight:700},
@@ -2063,9 +2072,9 @@ const S = {
   resteFoot:{fontSize:12,marginTop:5,opacity:.92},
   allocateBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",marginTop:12,padding:"10px",borderRadius:11,border:"none",background:"rgba(255,255,255,.22)",color:"#fff",fontSize:13.5,fontWeight:700,cursor:"pointer"},
   actionRow:{display:"flex",gap:10},
-  copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"none",background:"var(--surface)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:12,boxShadow:"var(--shadow)"},
+  copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:12},
   resetBtn:{border:"none",background:"transparent",color:"var(--text-4)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px 14px"},
-  section:{background:"var(--surface)",borderRadius:18,padding:16,boxShadow:"var(--shadow-card)"},
+  section:{background:"var(--glass-bg)",borderRadius:20,padding:16,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
   sectionHead:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10},
   sectionTitle:{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:700},
   badge:{fontSize:13,fontWeight:800,padding:"4px 11px",borderRadius:20},
@@ -2082,24 +2091,24 @@ const S = {
   addLineInput:{flex:1,border:"none",background:"transparent",fontSize:13.5,color:"var(--text-2)",outline:"none",padding:"6px 0"},
   addLineBtn:{border:"none",background:"transparent",fontSize:13,fontWeight:700,cursor:"pointer"},
   potList:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14},
-  potCard:{background:"var(--surface-2)",borderRadius:16,padding:16},
+  potCard:{background:"var(--glass-bg-strong)",borderRadius:18,padding:16,border:"1px solid var(--glass-border)",boxShadow:"var(--glass-shadow)"},
   potTop:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6},
-  potBalRow:{display:"flex",alignItems:"baseline",gap:6},
+  potBalRow:{display:"flex",alignItems:"baseline",gap:6,marginTop:6},
   potGoalTxt:{fontSize:13,color:"var(--text-3)",fontWeight:500},
-  potBarTrack:{height:7,background:"var(--track)",borderRadius:5,overflow:"hidden",marginTop:10},
+  potBarTrack:{height:7,background:"var(--track)",borderRadius:5,overflow:"hidden",marginTop:12},
   potBarFill:{height:"100%",borderRadius:5,transition:"width .4s ease"},
   potFoot:{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6},
   potMonthTag:{fontSize:11.5,color:"#19A979",fontWeight:600,marginTop:8},
   patStat:{flex:1,background:"rgba(255,255,255,.18)",borderRadius:11,padding:"9px 12px"},
   patStatLabel:{fontSize:10.5,opacity:.9,marginBottom:2},
   patStatVal:{fontSize:14,fontWeight:800},
-  bilanStat:{flex:1,minWidth:120,background:"var(--surface-2)",borderRadius:12,padding:"10px 12px"},
+  bilanStat:{flex:1,minWidth:120,background:"var(--glass-bg)",borderRadius:12,padding:"10px 12px",border:"1px solid var(--glass-border)"},
   bilanLabel:{fontSize:11,color:"var(--text-3)",marginBottom:2},
   bilanVal:{fontSize:18,fontWeight:800},
-  projCard:{background:"var(--surface-2)",borderRadius:18,padding:16,border:"1.5px solid var(--border)"},
+  projCard:{background:"var(--glass-bg-strong)",borderRadius:20,padding:16,border:"1px solid var(--glass-border)",boxShadow:"var(--glass-shadow)"},
   projStats:{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"},
-  projStat:{display:"flex",flexDirection:"column",gap:2,background:"var(--surface)",borderRadius:10,padding:"8px 12px",flex:1},
-  depositBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:5,width:"100%",marginTop:10,padding:"9px",borderRadius:11,border:"1.5px solid",background:"var(--surface)",fontSize:13,fontWeight:600,cursor:"pointer"},
+  projStat:{display:"flex",flexDirection:"column",gap:2,background:"var(--glass-bg)",borderRadius:10,padding:"8px 12px",flex:1,border:"1px solid var(--glass-border)"},
+  depositBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:5,width:"100%",marginTop:10,padding:"9px",borderRadius:11,border:"1.5px solid",background:"var(--glass-bg)",fontSize:13,fontWeight:600,cursor:"pointer"},
   depHead:{fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6},
   itemRow:{display:"flex",alignItems:"center",gap:11,padding:"10px 4px",borderBottom:"1px solid var(--border-2)"},
   itemDot:{width:9,height:9,borderRadius:"50%",flexShrink:0},
@@ -2107,13 +2116,13 @@ const S = {
   itemAmount:{fontSize:14.5,fontWeight:700,whiteSpace:"nowrap"},
   delBtn:{border:"none",background:"transparent",color:"var(--del)",cursor:"pointer",padding:4,display:"flex"},
   overlay:{position:"fixed",inset:0,background:"var(--overlay)",WebkitBackdropFilter:"blur(3px)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100,animation:"fadeIn .2s ease"},
-  modal:{background:"var(--surface)",borderRadius:"24px 24px 0 0",padding:"12px 22px calc(22px + env(safe-area-inset-bottom))",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",animation:"slideUp .3s cubic-bezier(.22,.61,.36,1)"},
+  modal:{background:"var(--glass-bg-strong)",borderRadius:"24px 24px 0 0",padding:"12px 22px calc(22px + env(safe-area-inset-bottom))",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",animation:"slideUp .3s cubic-bezier(.22,.61,.36,1)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(40px)",backdropFilter:"blur(40px)"},
   grabber:{width:38,height:5,borderRadius:3,background:"var(--border-3)",margin:"0 auto 14px"},
   modalHead:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18},
   modalTitle:{margin:0,fontSize:18,fontWeight:800},
   fieldLabel:{display:"block",fontSize:12.5,fontWeight:600,color:"var(--text-2)",marginBottom:6},
   input:{width:"100%",padding:"11px 13px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"},
-  suggestBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border-3)",background:"var(--surface-2)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer"},
+  suggestBtn:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border-3)",background:"var(--glass-bg)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer"},
   saveBtn:{width:"100%",padding:14,borderRadius:13,border:"none",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 14px rgba(29,139,206,.35)"},
   smallBtn:{display:"flex",alignItems:"center",gap:4,border:"none",borderRadius:9,padding:"6px 12px",fontSize:13,fontWeight:600,cursor:"pointer"},
 };
