@@ -33,6 +33,7 @@ const PATHS = {
   "wallet":'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2Z"/>',
   "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
   "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -116,10 +117,13 @@ const THEME_KEY = "budget-foyer-theme";
 const THEME_ORDER = ["auto","clair","sombre"];
 const THEME_ATTR = {auto:"auto",clair:"light",sombre:"dark"};
 const THEME_ICON = {auto:"contrast",clair:"sun",sombre:"moon"};
+const SETTINGS_KEY = "budget-foyer-settings";
 
 function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
 function saveData(d){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){console.error(e);} }
 function loadTheme(){ try{ return localStorage.getItem(THEME_KEY)||"auto"; }catch(e){ return "auto"; } }
+function loadSettings(){ try{ var r=localStorage.getItem(SETTINGS_KEY); return r?JSON.parse(r):{}; }catch(e){ return {}; } }
+function saveSettings(s){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }catch(e){ console.error(e); } }
 
 const blankMonth = () => ({
   revenus: PRESET.revenus.map(l=>({id:uid(),label:l,amount:0})),
@@ -273,6 +277,7 @@ function App(){
   const [modal,setModal]       = useState(null);
   const [tab,setTab]           = useState("budget");
   const [theme,setTheme]       = useState(loadTheme());
+  const [showPrevus,setShowPrevus] = useState(function(){ var s=loadSettings(); return s.showPrevus===true; });
   const [annualReturn,setAnnualReturn] = useState(3);
   const [advisorMode,setAdvisorMode]   = useState(true);
   const [profile,setProfile]           = useState(DEFAULT_PROFILE);
@@ -297,6 +302,7 @@ function App(){
     },1500);
   },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
+  useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
   useEffect(function(){
     if(!db) return;
     db.auth.getSession().then(function(res){
@@ -383,6 +389,7 @@ function App(){
 
   const changeMonth=(d)=>{let m=month+d,y=year;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMonth(m);setYear(y);};
   const setAmount=(k,id,a)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,amount:a}:x)}));
+  const setPrevuAmount=(id,a)=>setMonthData(function(c){var prev=Object.assign({},c.prevus||{});prev[id]=a;return Object.assign({},c,{prevus:prev});});
   const addLine=(k,l)=>setMonthData(c=>({...c,[k]:[...c[k],{id:uid(),label:l,amount:0}]}));
   const delLine=(k,id)=>setMonthData(c=>({...c,[k]:c[k].filter(x=>x.id!==id)}));
   const renameLine=(k,id,l)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,label:l}:x)}));
@@ -418,17 +425,7 @@ function App(){
         el("div",null,
           el("h1",{style:S.title},"Budget du foyer"),
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne"))),
-      el("div",{style:{display:"flex",gap:8}},
-        user&&householdCode&&el("button",{style:{...S.iconBtn,fontSize:10,fontWeight:800,letterSpacing:"1px",width:"auto",padding:"0 10px",fontFamily:"monospace",color:"#1D8BCE"},
-          title:"Code d'invitation foyer — cliquer pour copier",
-          onClick:function(){try{navigator.clipboard.writeText(householdCode);}catch(e){}}},
-          householdCode),
-        user&&db&&el("button",{style:{...S.iconBtn,color:"#C8516C"},onClick:function(){db.auth.signOut();},title:"Se déconnecter"},el(Icon,{name:"log-out",size:18})),
-        el("button",{style:S.iconBtn,onClick:cycleTheme,title:"Thème : "+theme},el(Icon,{name:THEME_ICON[theme],size:18})),
-        el("button",{style:S.iconBtn,onClick:exportJSON,title:"Exporter"},el(Icon,{name:"download",size:18})),
-        el("label",{style:{...S.iconBtn,cursor:"pointer"},title:"Importer"},
-          el(Icon,{name:"upload",size:18}),
-          el("input",{type:"file",accept:"application/json",onChange:importJSON,style:{display:"none"}})))),
+      el("div",{style:{display:"flex",gap:8}})),
 
     // month nav
     el("div",{style:S.monthNav},
@@ -460,7 +457,8 @@ function App(){
         el("button",{style:S.resetBtn,onClick:resetMonth},"Réinitialiser")),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
-        onAmount:(id,v)=>setAmount(kind,id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
+        prevus:data.prevus||{},showPrevus:showPrevus&&kind!=="revenus",
+        onAmount:(id,v)=>setAmount(kind,id,v),onPrevu:(id,v)=>setPrevuAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
 
     // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(React.Fragment,null,
@@ -544,12 +542,23 @@ function App(){
     // ---- TAB GRAPHIQUES ----
     tab==="graphiques" && el(React.Fragment,null,
       el(AnnualReview,{months:months,year:year}),
-      el(Charts,{months,pots,year,month,mk}))
+      el(Charts,{months,pots,year,month,mk})),
+
+    // ---- TAB RÉGLAGES ----
+    tab==="reglages" && el(SettingsScreen,{
+      theme:theme,setTheme:setTheme,
+      showPrevus:showPrevus,setShowPrevus:setShowPrevus,
+      householdCode:householdCode,
+      onSignOut:function(){if(db)db.auth.signOut();},
+      onExport:exportJSON,
+      onImport:importJSON,
+      user:user,db:db
+    })
     ), // fin du panneau d'onglet
 
     // ---- barre d'onglets en bas (style iOS) ----
     el("nav",{style:S.tabBar},
-      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"]].map(function(t){
+      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
           el(Icon,{name:icon,size:22,color:on?"#1D8BCE":"var(--text-3)"}),
@@ -577,6 +586,83 @@ function App(){
       onConfirm:()=>{delProject(modal.projId);setModal(null);}}),
     (modal&&modal.kind==="profile") && el(ProfileModal,{initial:profile,onClose:()=>setModal(null),onSave:function(p){setProfile(p);setModal(null);}})
   );
+}
+
+// ---- Page Réglages ----
+function SettingsScreen(props){
+  var theme=props.theme, setTheme=props.setTheme;
+  var showPrevus=props.showPrevus, setShowPrevus=props.setShowPrevus;
+  var householdCode=props.householdCode, onSignOut=props.onSignOut;
+  var onExport=props.onExport, onImport=props.onImport;
+  var user=props.user, db=props.db;
+  var sectionStyle={background:"var(--surface)",borderRadius:18,padding:"0 16px",boxShadow:"var(--shadow-card)",marginBottom:0};
+  var rowStyle={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border-2)"};
+  var lastRowStyle={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0"};
+  var labelStyle={fontSize:15,color:"var(--text)",fontWeight:500};
+  var sectionLabel={fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8,paddingLeft:4};
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:22}},
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Réglages"),
+
+    // Section Affichage
+    el("div",null,
+      el("div",{style:sectionLabel},"Affichage"),
+      el("div",{style:sectionStyle},
+        el("div",{style:lastRowStyle},
+          el("span",{style:labelStyle},"Thème"),
+          el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+            THEME_ORDER.map(function(t){
+              var on=theme===t;
+              return el("button",{key:t,onClick:function(){setTheme(t);},
+                style:{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",
+                  color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13,cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.1)":"none"}},
+                el(Icon,{name:THEME_ICON[t],size:14}),
+                t.charAt(0).toUpperCase()+t.slice(1));
+            }))))),
+
+    // Section Budget
+    el("div",null,
+      el("div",{style:sectionLabel},"Budget"),
+      el("div",{style:sectionStyle},
+        el("div",{style:lastRowStyle},
+          el("div",null,
+            el("div",{style:labelStyle},"Budget prévu vs réel"),
+            el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Affiche les montants prévus sur chaque ligne")),
+          el(Switch,{on:showPrevus,color:"#1D8BCE",onToggle:function(){setShowPrevus(!showPrevus);}})))),
+
+    // Section Foyer
+    (user&&db) && el("div",null,
+      el("div",{style:sectionLabel},"Foyer"),
+      el("div",{style:sectionStyle},
+        householdCode && el("div",{style:rowStyle},
+          el("span",{style:labelStyle},"Code d'invitation"),
+          el("button",{
+            style:{fontSize:13,fontWeight:800,letterSpacing:"2px",fontFamily:"monospace",color:"#1D8BCE",background:"#1D8BCE14",border:"none",borderRadius:9,padding:"7px 14px",cursor:"pointer"},
+            title:"Copier le code",
+            onClick:function(){try{navigator.clipboard.writeText(householdCode);}catch(e){}}},
+            householdCode+" 📋")),
+        el("div",{style:lastRowStyle},
+          el("span",{style:labelStyle},"Se déconnecter"),
+          el("button",{
+            style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",background:"#C8516C18",color:"#C8516C",fontSize:13,fontWeight:700,cursor:"pointer"},
+            onClick:onSignOut},
+            el(Icon,{name:"log-out",size:14,color:"#C8516C"}),"Déconnexion")))),
+
+    // Section Données
+    el("div",null,
+      el("div",{style:sectionLabel},"Données"),
+      el("div",{style:sectionStyle},
+        el("div",{style:rowStyle},
+          el("span",{style:labelStyle},"Exporter les données"),
+          el("button",{
+            style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",background:"#19A97918",color:"#19A979",fontSize:13,fontWeight:700,cursor:"pointer"},
+            onClick:onExport},
+            el(Icon,{name:"download",size:14,color:"#19A979"}),"Exporter JSON")),
+        el("div",{style:lastRowStyle},
+          el("span",{style:labelStyle},"Importer des données"),
+          el("label",{
+            style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",background:"#1D8BCE18",color:"#1D8BCE",fontSize:13,fontWeight:700,cursor:"pointer"}},
+            el(Icon,{name:"upload",size:14,color:"#1D8BCE"}),"Importer JSON",
+            el("input",{type:"file",accept:"application/json",onChange:onImport,style:{display:"none"}}))))));
 }
 
 // ---- Graphiques ----
@@ -976,25 +1062,53 @@ function flowRow(icon,color,label,val,valColor){
     el("span",{style:{...S.flowVal,color:valColor}},val));
 }
 
-function FastBlock({kind,cfg,items,onAmount,onDel,onRename,onAdd}){
+function FastBlock({kind,cfg,items,prevus,showPrevus,onAmount,onPrevu,onDel,onRename,onAdd}){
   const total=items.reduce((s,x)=>s+(x.amount||0),0);
+  const totalPrevu=showPrevus?items.reduce(function(s,x){return s+(parseFloat((prevus||{})[x.id])||0);},0):0;
   const [newLabel,setNewLabel]=useState("");
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
+  var diffTotal=total-totalPrevu;
   return el("div",{style:S.section},
     el("div",{style:S.sectionHead},
       el("span",{style:S.sectionTitle},el("span",{style:{color:cfg.accent,display:"flex"}},el(Icon,{name:cfg.icon,size:16,color:cfg.accent}))," "+cfg.title),
       el("span",{style:{...S.badge,background:cfg.accent+"1a",color:cfg.accent}},cfg.sign+" "+fmt(total))),
-    el("div",{style:S.lineList}, items.map(it=>el("div",{key:it.id,style:S.lineRow},
-      el("span",{style:{...S.lineDot,background:cfg.accent}}),
-      el("input",{style:S.lineLabelInput,value:it.label,onChange:e=>onRename(it.id,e.target.value),placeholder:"Libellé"}),
-      el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
-        el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
-          onChange:e=>onAmount(it.id,parseFloat(e.target.value)||0),onFocus:e=>e.target.select()}),
-        el("span",{style:S.eur},"€")),
-      el("button",{style:S.lineDel,onClick:()=>onDel(it.id)},el(Icon,{name:"x",size:15}))))),
+    showPrevus && totalPrevu>0 && el("div",{style:{display:"flex",justifyContent:"flex-end",gap:10,fontSize:12,color:"var(--text-3)",marginBottom:4}},
+      el("span",null,"Réel"),
+      el("span",null,"Prévu"),
+      el("span",{style:{minWidth:60,textAlign:"right"}},"Écart")),
+    el("div",{style:S.lineList}, items.map(function(it){
+      var prevu=showPrevus?parseFloat((prevus||{})[it.id])||0:0;
+      var diff=it.amount-prevu;
+      var diffColor=diff>0?"#C8516C":(diff<0?"#19A979":"var(--text-3)");
+      return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
+        el("div",{style:S.lineRow},
+          el("span",{style:{...S.lineDot,background:cfg.accent}}),
+          el("input",{style:S.lineLabelInput,value:it.label,onChange:function(e){onRename(it.id,e.target.value);},placeholder:"Libellé"}),
+          showPrevus && el("div",{style:{display:"flex",alignItems:"center",gap:6}},
+            el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
+              el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
+                onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
+              el("span",{style:S.eur},"€")),
+            el("div",{style:{...S.lineAmtWrap,width:80,borderColor:"var(--border-2)"}},
+              el("input",{type:"number",inputMode:"decimal",style:{...S.lineAmtInput,fontSize:12,color:"var(--text-3)"},value:prevu||"",placeholder:"prévu",
+                onChange:function(e){onPrevu(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
+              el("span",{style:{...S.eur,fontSize:11}},"€")),
+            prevu>0 && el("span",{style:{fontSize:11,fontWeight:700,color:diffColor,minWidth:50,textAlign:"right"}},(diff>0?"+":"")+fmt(diff))),
+          !showPrevus && el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
+            el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
+              onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
+            el("span",{style:S.eur},"€")),
+          el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))));
+    })),
+    showPrevus && totalPrevu>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
+      el("span",{style:{color:"var(--text-3)"}},"Totaux"),
+      el("div",{style:{display:"flex",gap:10}},
+        el("span",{style:{color:cfg.accent}},fmt(total)),
+        el("span",{style:{color:"var(--text-3)"}},"/ "+fmt(totalPrevu)),
+        el("span",{style:{color:diffTotal>0?"#C8516C":(diffTotal<0?"#19A979":"var(--text-3)")}},(diffTotal>0?"+":"")+fmt(diffTotal)))),
     el("div",{style:S.addLineRow},
       el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
-      el("input",{style:S.addLineInput,value:newLabel,placeholder:"Ajouter une ligne…",onChange:e=>setNewLabel(e.target.value),onKeyDown:e=>e.key==="Enter"&&addNew()}),
+      el("input",{style:S.addLineInput,value:newLabel,placeholder:"Ajouter une ligne…",onChange:function(e){setNewLabel(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addNew();}}),
       newLabel.trim() && el("button",{style:{...S.addLineBtn,color:cfg.accent},onClick:addNew},"Ajouter")));
 }
 
