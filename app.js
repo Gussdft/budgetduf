@@ -277,6 +277,27 @@ function HouseholdScreen({onDone}) {
 }
 
 // ----------------------------------------------------------------------------
+function MonthMovements({deposits,pots,monthLabel,delDeposit}){
+  var [open,setOpen]=React.useState(false);
+  return el("div",{style:{marginTop:14}},
+    el("button",{style:{...S.depHead,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",padding:0,cursor:"pointer",width:"100%"},onClick:function(){setOpen(!open);}},
+      "Mouvements de "+monthLabel+" ("+deposits.length+")",
+      el("span",{style:{marginLeft:"auto",transition:"transform .15s",transform:open?"rotate(180deg)":"none",display:"flex"}},el(Icon,{name:"chevron-down",size:14}))),
+    open && deposits.map(function(d){
+      var p=pots.find(function(x){return x.id===d.potId;});
+      var isW=d.amount<0;
+      var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
+      return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4}},
+        el("div",{style:{display:"flex",alignItems:"center",gap:11}},
+          el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
+          el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
+          el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
+          el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
+        d.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},d.note));
+    }));
+}
+
+// ----------------------------------------------------------------------------
 function App(){
   const now = new Date();
   const [year,setYear]   = useState(now.getFullYear());
@@ -488,52 +509,38 @@ function App(){
           var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
           var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
           var pt=p.type&&POT_TYPES[p.type]?POT_TYPES[p.type]:null;
+          var potKeys=Object.keys(months).sort();
+          var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
+          var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
+          var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
+          var metaParts=[];
+          if(thisMonth!==0) metaParts.push(thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois");
+          if(potAvg>0) metaParts.push(fmt(potAvg)+"/mois en moy.");
+          if(mToGoal!=null&&mToGoal>0) metaParts.push("~"+mToGoal+" mois pour finir");
+          if(p.startBalance>0) metaParts.push("dont "+fmt(p.startBalance)+" de départ");
           return el("div",{key:p.id,style:S.potCard},
             el("div",{style:S.potTop},
               el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
                 el(Icon,{name:pt?pt.icon:"piggy-bank",size:16,color:p.color}),
                 el("strong",{style:{fontSize:14}},p.label),
                 pt&&el("span",{style:{fontSize:10,fontWeight:700,background:p.color+"22",color:p.color,borderRadius:6,padding:"2px 7px"}},pt.badge)),
-              el("div",{style:{display:"flex",gap:4}},
+              el("div",{style:{display:"flex",gap:4,marginLeft:"auto"}},
                 el("button",{style:S.delBtn,title:"Historique",onClick:function(){setModal({kind:"history",pot:p});}},el(Icon,{name:"clock",size:13})),
                 el("button",{style:S.delBtn,title:"Modifier",onClick:function(){setModal({kind:"editpot",pot:p});}},el(Icon,{name:"edit-2",size:13})),
                 el("button",{style:{...S.delBtn,color:"#C8516C"},title:"Supprimer",onClick:function(){setModal({kind:"confirmdel",potId:p.id,potLabel:p.label});}},el(Icon,{name:"trash-2",size:13})))),
-            el("div",{style:S.potBalRow},el("span",{style:{fontSize:21,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
-            p.startBalance>0 && el("div",{style:{fontSize:11,color:"var(--text-4)",marginTop:2}},"dont "+fmt(p.startBalance)+" de départ"),
+            el("div",{style:{...S.potBalRow,marginTop:6}},el("span",{style:{fontSize:24,fontWeight:800,color:p.color,letterSpacing:"-0.5px"}},fmt(bal)),p.goal>0&&el("span",{style:S.potGoalTxt},"/ "+fmt(p.goal))),
             (pt&&pt.plafond&&bal>=pt.plafond*0.9) && el("div",{style:{fontSize:11,color:"#E8743B",fontWeight:600,marginTop:4,display:"flex",alignItems:"center",gap:4}},el(Icon,{name:"zap",size:11,color:"#E8743B"}),"Plafond "+pt.badge+" bientôt atteint ("+fmt(pt.plafond)+")"),
             pct!==null && el(React.Fragment,null,
-              el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
+              el("div",{style:{...S.potBarTrack,marginTop:12}},el("div",{style:{...S.potBarFill,width:pct+"%",background:p.color}})),
               el("div",{style:S.potFoot},el("span",{style:{color:p.color,fontWeight:600}},pct.toFixed(0)+"%"),el("span",{style:{color:"var(--text-3)"}},bal>=p.goal?"Atteint 🎉":"reste "+fmt(p.goal-bal)))),
-            thisMonth!==0 && el("div",{style:{...S.potMonthTag,color:thisMonth>0?"#19A979":"#C8516C"}},thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois"),
+            el("div",{style:{fontSize:10,color:"var(--text-4)",marginTop:10,marginBottom:2}},"6 derniers mois"),
             el(PotSparkline,{months:months,potId:p.id,year:year,month:month,color:p.color}),
-            (function(){
-              var potKeys=Object.keys(months).sort();
-              var potTotalDep=potKeys.reduce(function(s,k){return s+(months[k].deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);},0);
-              var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
-              var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
-              if(potAvg===0&&!mToGoal) return null;
-              return el("div",{style:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}},
-                potAvg>0&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:"var(--surface-3)",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:"var(--text-2)",fontWeight:600}},fmt(potAvg)),"/mois en moy."),
-                mToGoal!=null&&el("div",{style:{fontSize:11,color:"var(--text-3)",background:p.color+"14",borderRadius:8,padding:"4px 9px"}},el("span",{style:{color:p.color,fontWeight:700}},mToGoal>0?"~"+mToGoal+" mois":"Atteint"),mToGoal>0?" pour finir":""));
-            })(),
-            el("div",{style:{display:"flex",gap:8,marginTop:10}},
+            metaParts.length>0 && el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:8,lineHeight:1.5}},metaParts.join("  ·  ")),
+            el("div",{style:{display:"flex",gap:8,marginTop:12}},
               el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:p.color,borderColor:p.color+"40"},onClick:function(){setModal({kind:"deposit",potId:p.id,potLabel:p.label,color:p.color});}},el(Icon,{name:"plus",size:14,color:p.color})," Verser"),
               el("button",{style:{...S.depositBtn,marginTop:0,flex:1,color:"#C8516C",borderColor:"#C8516C40"},onClick:function(){setModal({kind:"withdraw",potId:p.id,potLabel:p.label,color:p.color,balance:bal});}},el(Icon,{name:"arrow-right",size:14,color:"#C8516C",style:{transform:"rotate(90deg)"}})," Retirer")));
         })),
-        (data.deposits||[]).length>0 && el("div",{style:{marginTop:14}},
-          el("div",{style:S.depHead},"Mouvements de "+MONTHS_FR[month]),
-          data.deposits.map(function(d){
-            var p=pots.find(function(x){return x.id===d.potId;});
-            var isW=d.amount<0;
-            var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
-            return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4}},
-              el("div",{style:{display:"flex",alignItems:"center",gap:11}},
-                el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
-                el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-                el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
-                el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
-              d.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},d.note));
-          })))),
+        (data.deposits||[]).length>0 && el(MonthMovements,{deposits:data.deposits,pots:pots,monthLabel:MONTHS_FR[month],delDeposit:delDeposit}))),
 
     // ---- TAB PROJETS ----
     tab==="projets" && el(React.Fragment,null,
@@ -2074,8 +2081,8 @@ const S = {
   addLineRow:{display:"flex",alignItems:"center",gap:8,marginTop:6,paddingTop:10,borderTop:"1px dashed var(--border-2)"},
   addLineInput:{flex:1,border:"none",background:"transparent",fontSize:13.5,color:"var(--text-2)",outline:"none",padding:"6px 0"},
   addLineBtn:{border:"none",background:"transparent",fontSize:13,fontWeight:700,cursor:"pointer"},
-  potList:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12},
-  potCard:{background:"var(--surface-2)",borderRadius:16,padding:14},
+  potList:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14},
+  potCard:{background:"var(--surface-2)",borderRadius:16,padding:16},
   potTop:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6},
   potBalRow:{display:"flex",alignItems:"baseline",gap:6},
   potGoalTxt:{fontSize:13,color:"var(--text-3)",fontWeight:500},
