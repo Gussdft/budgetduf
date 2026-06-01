@@ -676,6 +676,17 @@ function App(){
   const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
   const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
   const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
+  const fillAverage=function(){
+    var pastKeys=[];
+    for(var ii=1;ii<=3;ii++){var dd=new Date(year,month-ii,1);var kk=monthKey(dd.getFullYear(),dd.getMonth());if(months[kk])pastKeys.push(kk);}
+    if(pastKeys.length===0){copyPrev();return;}
+    function avgCat(cat){
+      var labelMap={};
+      pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(!labelMap[line.label])labelMap[line.label]=[];labelMap[line.label].push(line.amount||0);});});
+      return Object.keys(labelMap).map(function(lbl){var ams=labelMap[lbl];var avg=Math.round(ams.reduce(function(s,a){return s+a;},0)/ams.length);return {id:uid(),label:lbl,amount:avg};});
+    }
+    setMonthData(function(){return {revenus:avgCat("revenus"),fixed:avgCat("fixed"),variable:avgCat("variable"),excep:[],deposits:[]};});
+  };
   const copyPrev=()=>{const d=new Date(year,month-1,1);const pk=monthKey(d.getFullYear(),d.getMonth());const prev=months[pk];if(!prev)return;
     setMonthData(()=>({revenus:prev.revenus.map(x=>({...x,id:uid()})),fixed:prev.fixed.map(x=>({...x,id:uid()})),variable:prev.variable.map(x=>({...x,id:uid()})),excep:prev.excep.map(x=>({...x,id:uid(),amount:0})),deposits:[]}));};
   const resetMonth=()=>setMonthData(()=>blankMonth());
@@ -727,7 +738,8 @@ function App(){
             el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes"))),
 
       el("div",{style:S.actionRow},
-        el("button",{style:S.copyBtn,onClick:copyPrev},el(Icon,{name:"rotate-ccw",size:14})," Recopier le mois précédent"),
+        el("button",{style:S.copyBtn,onClick:copyPrev},el(Icon,{name:"rotate-ccw",size:14})," Mois précédent"),
+        el("button",{style:Object.assign({},S.copyBtn,{color:"#945ECF",borderColor:"#945ECF44",background:"#945ECF10"}),onClick:fillAverage},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
         el("button",{style:S.resetBtn,onClick:resetMonth},"Réinitialiser")),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
@@ -2191,6 +2203,51 @@ function OutilsScreen(props){
 }
 
 // ----------------------------------------------------------------------------
+// ---- Mini graphique tendance (6 derniers mois) ----
+function MiniTrendChart(props){
+  var months=props.months;
+  var today=new Date();
+  var entries=[];
+  for(var i=5;i>=0;i--){
+    var d=new Date(today.getFullYear(),today.getMonth()-i,1);
+    var k=monthKey(d.getFullYear(),d.getMonth());
+    var m=months[k]||blankMonth();
+    var sumA=function(arr){return (arr||[]).reduce(function(s,x){return s+(x.amount||0);},0);};
+    entries.push({
+      label:MONTHS_FR[d.getMonth()].slice(0,3),
+      rev:sumA(m.revenus),
+      dep:sumA(m.fixed)+sumA(m.variable)+sumA(m.excep),
+      sav:sumA(m.deposits)
+    });
+  }
+  var maxV=entries.reduce(function(mx,e){return Math.max(mx,e.rev,e.dep);},1);
+  var W=300,H=90,pad=8,btm=18,topPad=6;
+  var usableH=H-btm-topPad;
+  var grpW=(W-pad*2)/6;
+  var barW=Math.max(4,Math.floor(grpW*0.36));
+  var svgParts=[];
+  entries.forEach(function(e,i){
+    var x=pad+i*grpW+2;
+    var hRev=maxV>0?Math.round(e.rev/maxV*usableH):0;
+    var hDep=maxV>0?Math.round(e.dep/maxV*usableH):0;
+    var yRev=topPad+usableH-hRev;
+    var yDep=topPad+usableH-hDep;
+    var mid=x+grpW/2-2;
+    if(hRev>0) svgParts.push('<rect x="'+Math.round(x)+'" y="'+yRev+'" width="'+barW+'" height="'+hRev+'" rx="3" fill="#19A97988"/>');
+    if(hDep>0) svgParts.push('<rect x="'+(Math.round(x)+barW+2)+'" y="'+yDep+'" width="'+barW+'" height="'+hDep+'" rx="3" fill="#E8743B88"/>');
+    svgParts.push('<text x="'+Math.round(mid)+'" y="'+(H-3)+'" text-anchor="middle" font-size="8" fill="rgba(128,128,128,.7)" font-family="-apple-system,system-ui">'+e.label+'</text>');
+  });
+  return el("div",null,
+    el("div",{style:{display:"flex",gap:14,marginBottom:6,fontSize:11}},
+      el("span",{style:{display:"flex",alignItems:"center",gap:4}},
+        el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#19A979"}}),
+        el("span",{style:{color:"var(--text-3)"}},"Revenus")),
+      el("span",{style:{display:"flex",alignItems:"center",gap:4}},
+        el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#E8743B"}}),
+        el("span",{style:{color:"var(--text-3)"}},"Dépenses"))),
+    el("div",{dangerouslySetInnerHTML:{__html:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svgParts.join('')+'</svg>'}}));
+}
+
 // ---- Grille de KPI (Accueil) ----
 function KpiGrid(props){
   var cardStyle={background:"var(--glass-bg)",borderRadius:18,padding:"13px 14px",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)",boxShadow:"var(--glass-shadow)"};
@@ -2286,6 +2343,11 @@ function DashboardScreen(props){
 
     // --- Grille de KPI ---
     el(KpiGrid,{savingsRate:savingsPct,patrimoineNet:kpiPatrimoineNet,precautionMonths:precautionMonths,monthlyExpenses:totalDep,nonAffecte:nonAffecte}),
+
+    // --- Tendance 6 mois ---
+    el("div",{style:cardStyle},
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"Tendance — 6 derniers mois"),
+      el(MiniTrendChart,{months:months})),
 
     // --- Carte Mois en cours ---
     el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},
