@@ -33,6 +33,12 @@ const PATHS = {
   "wallet":'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2Z"/>',
   "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
   "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "calculator":'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="8" x2="8" y1="14" y2="14"/><line x1="12" x2="12" y1="14" y2="14"/><line x1="16" x2="16" y1="14" y2="14"/><line x1="8" x2="8" y1="18" y2="18"/><line x1="12" x2="12" y1="18" y2="18"/><line x1="16" x2="16" y1="18" y2="18"/>',
+  "percent":'<line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  "car":'<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+  "calendar":'<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+  "file-text":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
+  "scale":'<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
   "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
@@ -118,6 +124,8 @@ const THEME_ORDER = ["auto","clair","sombre"];
 const THEME_ATTR = {auto:"auto",clair:"light",sombre:"dark"};
 const THEME_ICON = {auto:"contrast",clair:"sun",sombre:"moon"};
 const SETTINGS_KEY = "budget-foyer-settings";
+const PATRIMOINE_KEY = "budget-foyer-patrimoine";
+const ECHEANCES_KEY = "budget-foyer-echeances";
 
 function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
 function saveData(d){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){console.error(e);} }
@@ -543,6 +551,9 @@ function App(){
       el(AnnualReview,{months:months,year:year}),
       el(Charts,{months,pots,year,month,mk})),
 
+    // ---- TAB OUTILS ----
+    tab==="outils" && el(OutilsScreen,null),
+
     // ---- TAB RÉGLAGES ----
     tab==="reglages" && el(SettingsScreen,{
       theme:theme,setTheme:setTheme,
@@ -557,7 +568,7 @@ function App(){
 
     // ---- barre d'onglets en bas (style iOS) ----
     el("nav",{style:S.tabBar},
-      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["reglages","settings","Réglages"]].map(function(t){
+      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
           el("span",{style:{display:"flex",transform:on?"translateY(-1px) scale(1.06)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
@@ -1287,6 +1298,376 @@ function Modal({title,children,onClose}){
       el("div",{style:S.grabber}),
       el("div",{style:S.modalHead},el("h2",{style:S.modalTitle},title),el("button",{style:S.iconBtn,onClick:onClose},el(Icon,{name:"x",size:18}))),
       children));
+}
+
+// ============================================================================
+// ---- OUTILS : simulateurs patrimoniaux ----
+// ============================================================================
+const IR_BRACKETS = [
+  {upTo:11294, rate:0},
+  {upTo:28797, rate:0.11},
+  {upTo:82341, rate:0.30},
+  {upTo:177106, rate:0.41},
+  {upTo:Infinity, rate:0.45},
+];
+function irParts(situation, enfants){
+  var base = situation==="couple" ? 2 : 1;
+  var e = enfants||0;
+  var ep = 0;
+  if(e>=1) ep += 0.5;
+  if(e>=2) ep += 0.5;
+  if(e>=3) ep += (e-2)*1;
+  return base + ep;
+}
+function irTaxOnQuotient(q){
+  var tax=0, prev=0, i;
+  for(i=0;i<IR_BRACKETS.length;i++){
+    var b=IR_BRACKETS[i];
+    if(q>prev){ tax += (Math.min(q,b.upTo)-prev)*b.rate; prev=b.upTo; }
+    else break;
+  }
+  return tax;
+}
+function irMarginalRate(q){
+  var i, r=0;
+  for(i=0;i<IR_BRACKETS.length;i++){ if(q>(i===0?0:IR_BRACKETS[i-1].upTo)) r=IR_BRACKETS[i].rate; }
+  return r;
+}
+
+function loanMonthly(P, annualRate, n){
+  if(n<=0) return 0;
+  var r = annualRate/100/12;
+  if(r===0) return P/n;
+  return P*r/(1-Math.pow(1+r,-n));
+}
+function loanCapacity(monthlyMax, annualRate, n){
+  if(n<=0) return 0;
+  var r = annualRate/100/12;
+  if(r===0) return monthlyMax*n;
+  return monthlyMax*(1-Math.pow(1+r,-n))/r;
+}
+
+function loadPatrimoine(){ try{ var r=localStorage.getItem(PATRIMOINE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function loadEcheances(){ try{ var r=localStorage.getItem(ECHEANCES_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function defaultEcheances(){
+  var y=new Date().getFullYear();
+  return [
+    {id:uid(),label:"Solde impôt sur le revenu",date:y+"-09-25",montant:0,paid:false},
+    {id:uid(),label:"Taxe foncière",date:y+"-10-15",montant:0,paid:false},
+    {id:uid(),label:"Taxe d'habitation résidence secondaire",date:y+"-11-15",montant:0,paid:false},
+  ];
+}
+
+var TOOL_LINE = {display:"flex",alignItems:"center",gap:9,padding:"5px 0"};
+
+function ToolBack({onBack}){
+  return el("button",{onClick:onBack,style:{display:"flex",alignItems:"center",gap:4,border:"none",background:"transparent",color:"#1D8BCE",fontSize:15,fontWeight:600,cursor:"pointer",padding:"4px 0",marginBottom:4}},
+    el(Icon,{name:"chevron-left",size:18,color:"#1D8BCE"}),"Outils");
+}
+function bigNumber(value,color){
+  return el("div",{style:{fontSize:30,fontWeight:800,letterSpacing:"-0.5px",color:color||"var(--text)"}},value);
+}
+
+// ---- Simulateur 1 : Impôt sur le revenu ----
+function IRSimulator({onBack}){
+  const [revenu,setRevenu]=useState("");
+  const [situation,setSituation]=useState("couple");
+  const [enfants,setEnfants]=useState(0);
+  var R=parseFloat(revenu)||0;
+  var parts=irParts(situation,enfants);
+  var quotient=parts>0?R/parts:0;
+  var impot=Math.max(0,irTaxOnQuotient(quotient)*parts);
+  var tauxMoyen=R>0?(impot/R)*100:0;
+  var tauxMarginal=irMarginalRate(quotient)*100;
+  var netMensuel=(R-impot)/12;
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Impôt sur le revenu"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Revenu net imposable annuel du foyer (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 60000",onChange:function(e){setRevenu(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Situation"),
+      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+        [["celibataire","Célibataire"],["couple","Couple"]].map(function(o){
+          var on=situation===o[0];
+          return el("button",{key:o[0],onClick:function(){setSituation(o[0]);},
+            style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
+        })),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Nombre d'enfants à charge"),
+      el("div",{style:{display:"flex",alignItems:"center",gap:12}},
+        el("button",{onClick:function(){setEnfants(Math.max(0,enfants-1));},style:S.navBtn},el(Icon,{name:"chevron-left",size:18})),
+        el("span",{style:{fontSize:18,fontWeight:700,minWidth:30,textAlign:"center"}},enfants),
+        el("button",{onClick:function(){setEnfants(enfants+1);},style:S.navBtn},el(Icon,{name:"chevron-right",size:18})),
+        el("span",{style:{fontSize:13,color:"var(--text-3)",marginLeft:8}},parts+" part"+(parts>1?"s":"")))),
+    el("div",{style:S.section},
+      el("div",{style:S.fieldLabel},"Impôt total estimé"),
+      bigNumber(fmt(impot),"#C8516C"),
+      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux moyen"),el("div",{style:S.bilanVal},tauxMoyen.toFixed(1)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux marginal"),el("div",{style:S.bilanVal},tauxMarginal.toFixed(0)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net après impôt / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(netMensuel)))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative, hors réductions/crédits d'impôt et plafonnement du quotient familial.")));
+}
+
+// ---- Simulateur 2 : Prêt ----
+function LoanSimulator({onBack}){
+  const [montant,setMontant]=useState("");
+  const [taux,setTaux]=useState("3.5");
+  const [duree,setDuree]=useState("20");
+  const [unit,setUnit]=useState("ans");
+  const [assurance,setAssurance]=useState("");
+  const [showTable,setShowTable]=useState(false);
+  const [revMens,setRevMens]=useState("");
+  const [chargesCr,setChargesCr]=useState("");
+
+  var P=parseFloat(montant)||0;
+  var tx=parseFloat(taux)||0;
+  var n=unit==="ans"?(parseFloat(duree)||0)*12:(parseFloat(duree)||0);
+  n=Math.round(n);
+  var M=loanMonthly(P,tx,n);
+  var assPct=parseFloat(assurance)||0;
+  var assMens=P*assPct/100/12;
+  var totalPaid=M*n;
+  var cout=totalPaid-P;
+  var coutAssur=cout+assMens*n;
+
+  // amortissement annuel
+  var rows=[];
+  if(P>0&&n>0&&M>0){
+    var r=tx/100/12, solde=P, yIndex=0;
+    var maxYears=Math.ceil(n/12);
+    for(var y=0;y<maxYears&&y<12;y++){
+      var capRemb=0, interets=0;
+      for(var mo=0;mo<12&&yIndex<n;mo++){
+        var iMois=solde*r;
+        var capMois=M-iMois;
+        solde-=capMois;
+        interets+=iMois; capRemb+=capMois; yIndex++;
+      }
+      if(solde<0) solde=0;
+      rows.push({an:y+1,cap:capRemb,int:interets,reste:solde});
+    }
+  }
+
+  var revM=parseFloat(revMens)||0;
+  var chM=parseFloat(chargesCr)||0;
+  var mensMax=Math.max(0,revM*0.35-chM);
+  var capEmpr=loanCapacity(mensMax,tx,n);
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Simulateur de prêt"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Montant emprunté (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:montant,placeholder:"ex : 200000",onChange:function(e){setMontant(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Taux annuel (%)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Durée"),
+      el("div",{style:{display:"flex",gap:10}},
+        el("input",{type:"number",inputMode:"decimal",style:Object.assign({},S.input,{flex:1}),value:duree,onChange:function(e){setDuree(e.target.value);}}),
+        el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+          [["ans","ans"],["mois","mois"]].map(function(o){
+            var on=unit===o[0];
+            return el("button",{key:o[0],onClick:function(){setUnit(o[0]);},
+              style:{padding:"9px 14px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
+          }))),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Assurance (% annuel du capital, optionnel)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:assurance,placeholder:"ex : 0.36",onChange:function(e){setAssurance(e.target.value);}})),
+    el("div",{style:S.section},
+      el("div",{style:S.fieldLabel},"Mensualité (hors assurance)"),
+      bigNumber(fmt(M),"#1D8BCE"),
+      assMens>0&&el("div",{style:{fontSize:13,color:"var(--text-2)",marginTop:4}},"+ "+fmt(assMens)+" d'assurance = "+fmt(M+assMens)+" / mois"),
+      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Coût du crédit"),el("div",{style:Object.assign({},S.bilanVal,{color:"#E8743B"})},fmt(cout))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Total avec assurance"),el("div",{style:S.bilanVal},fmt(coutAssur)))),
+      rows.length>0&&el("button",{onClick:function(){setShowTable(!showTable);},style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14",marginTop:14})},showTable?"Masquer l'amortissement":"Voir l'amortissement"),
+      showTable&&el("div",{style:{marginTop:12,overflowX:"auto"}},
+        el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5}},
+          el("thead",null,el("tr",null,
+            ["Année","Capital","Intérêts","Restant dû"].map(function(h){return el("th",{key:h,style:{textAlign:h==="Année"?"left":"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:700,borderBottom:"1px solid var(--border-2)"}},h);}))),
+          el("tbody",null,rows.map(function(rw){
+            return el("tr",{key:rw.an},
+              el("td",{style:{padding:"6px 4px",fontWeight:600}},rw.an),
+              el("td",{style:{padding:"6px 4px",textAlign:"right"}},fmt(rw.cap)),
+              el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#E8743B"}},fmt(rw.int)),
+              el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-3)"}},fmt(rw.reste)));
+          }))))),
+    el("div",{style:S.section},
+      el("div",{style:S.sectionTitle},el(Icon,{name:"scale",size:16,color:"#19A979"})," Capacité d'emprunt"),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Revenus mensuels du foyer (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revMens,placeholder:"ex : 4500",onChange:function(e){setRevMens(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Charges crédits existantes (€/mois)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesCr,placeholder:"0",onChange:function(e){setChargesCr(e.target.value);}}),
+      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Mensualité max (35 %)"),el("div",{style:S.bilanVal},fmt(mensMax))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Capital empruntable"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(capEmpr)))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:12,marginBottom:0}},"Pour le taux et la durée saisis ci-dessus.")));
+}
+
+// ---- Simulateur 3 : Bilan patrimonial ----
+function BilanSimulator({onBack}){
+  const [actifs,setActifs]=useState(function(){ var d=loadPatrimoine(); return d&&d.actifs?d.actifs:[]; });
+  const [passifs,setPassifs]=useState(function(){ var d=loadPatrimoine(); return d&&d.passifs?d.passifs:[]; });
+  useEffect(function(){ try{ localStorage.setItem(PATRIMOINE_KEY,JSON.stringify({actifs:actifs,passifs:passifs})); }catch(e){} },[actifs,passifs]);
+
+  var nowY=new Date().getFullYear();
+  function actifValue(a){
+    var v=a.valeur||0;
+    if(a.type==="voiture"&&a.decote>0&&a.annee){
+      var years=Math.max(0,nowY-a.annee);
+      v=v*Math.pow(1-a.decote/100,years);
+    }
+    return v;
+  }
+  var totalActifs=actifs.reduce(function(s,a){return s+actifValue(a);},0);
+  var totalPassifs=passifs.reduce(function(s,p){return s+(p.montant||0);},0);
+  var net=totalActifs-totalPassifs;
+
+  var byType={};
+  actifs.forEach(function(a){ var t=a.type||"autre"; byType[t]=(byType[t]||0)+actifValue(a); });
+
+  function updA(id,upd){ setActifs(actifs.map(function(a){return a.id===id?Object.assign({},a,upd):a;})); }
+  function updP(id,upd){ setPassifs(passifs.map(function(p){return p.id===id?Object.assign({},p,upd):p;})); }
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Bilan patrimonial net"),
+    el("div",{style:{background:"linear-gradient(135deg,#1D8BCE,#19A979)",borderRadius:18,padding:"18px 20px",color:"#fff"}},
+      el("div",{style:{fontSize:13,fontWeight:600,opacity:.95}},"Patrimoine net"),
+      el("div",{style:{fontSize:34,fontWeight:800,letterSpacing:"-1px",marginTop:2}},fmt(net)),
+      el("div",{style:{display:"flex",gap:12,marginTop:12}},
+        el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Actifs"),el("div",{style:S.patStatVal},fmt(totalActifs))),
+        el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Passifs"),el("div",{style:S.patStatVal},fmt(totalPassifs))))),
+    Object.keys(byType).length>0&&el("div",{style:S.section},
+      el("div",{style:S.sectionTitle},"Répartition des actifs"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:10,marginTop:12}},
+        Object.keys(byType).map(function(t){
+          var pt=POT_TYPES[t]||{label:t,color:"#6C8893"};
+          var val=byType[t];
+          var pct=totalActifs>0?(val/totalActifs)*100:0;
+          return el("div",{key:t},
+            el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12.5,marginBottom:4}},
+              el("span",{style:{color:"var(--text-2)",fontWeight:600}},pt.label),
+              el("span",{style:{color:"var(--text-3)"}},fmt(val)+" · "+pct.toFixed(0)+"%")),
+            el("div",{style:S.potBarTrack},el("div",{style:Object.assign({},S.potBarFill,{width:pct+"%",background:pt.color})})));
+        }))),
+    el("div",{style:S.section},
+      el("div",{style:S.sectionHead},
+        el("span",{style:S.sectionTitle},el(Icon,{name:"coins",size:16,color:"#19A979"})," Actifs"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#19A979",background:"#19A97914"}),onClick:function(){setActifs(actifs.concat([{id:uid(),label:"",type:"livret",valeur:0}]));}},el(Icon,{name:"plus",size:14,color:"#19A979"})," Actif")),
+      actifs.length===0&&el("p",{style:S.blockHint},"Ajoute tes actifs (livrets, PEA, immobilier, voiture…)."),
+      actifs.map(function(a){
+        return el("div",{key:a.id,style:{padding:"8px 0",borderBottom:"1px solid var(--border-2)"}},
+          el("div",{style:TOOL_LINE},
+            el("input",{style:S.lineLabelInput,value:a.label,placeholder:"Libellé",onChange:function(e){updA(a.id,{label:e.target.value});}}),
+            el("div",{style:Object.assign({},S.lineAmtWrap,{width:110})},
+              el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:a.valeur||"",placeholder:"0",onChange:function(e){updA(a.id,{valeur:parseFloat(e.target.value)||0});}}),
+              el("span",{style:S.eur},"€")),
+            el("button",{style:S.lineDel,onClick:function(){setActifs(actifs.filter(function(x){return x.id!==a.id;}));}},el(Icon,{name:"trash-2",size:15}))),
+          el("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}},
+            el("select",{value:a.type,onChange:function(e){updA(a.id,{type:e.target.value});},style:{fontSize:12.5,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}},
+              ["livret","pea","av","immo","voiture","courant","autre"].map(function(tk){return el("option",{key:tk,value:tk},(POT_TYPES[tk]&&POT_TYPES[tk].badge)||(tk==="voiture"?"Voiture":tk));})),
+            a.type==="voiture"&&el(React.Fragment,null,
+              el("input",{type:"number",inputMode:"decimal",placeholder:"décote %/an",value:a.decote||"",onChange:function(e){updA(a.id,{decote:parseFloat(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
+              el("input",{type:"number",inputMode:"numeric",placeholder:"année achat",value:a.annee||"",onChange:function(e){updA(a.id,{annee:parseInt(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
+              (a.decote>0&&a.annee)&&el("span",{style:{fontSize:11.5,color:"var(--text-3)"}},"≈ "+fmt(actifValue(a))))));
+      })),
+    el("div",{style:S.section},
+      el("div",{style:S.sectionHead},
+        el("span",{style:S.sectionTitle},el(Icon,{name:"file-text",size:16,color:"#C8516C"})," Passifs"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#C8516C",background:"#C8516C14"}),onClick:function(){setPassifs(passifs.concat([{id:uid(),label:"",montant:0}]));}},el(Icon,{name:"plus",size:14,color:"#C8516C"})," Passif")),
+      passifs.length===0&&el("p",{style:S.blockHint},"Ajoute tes dettes (crédit immo, prêt auto…)."),
+      passifs.map(function(p){
+        return el("div",{key:p.id,style:TOOL_LINE},
+          el("input",{style:S.lineLabelInput,value:p.label,placeholder:"Libellé",onChange:function(e){updP(p.id,{label:e.target.value});}}),
+          el("div",{style:Object.assign({},S.lineAmtWrap,{width:110})},
+            el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:p.montant||"",placeholder:"0",onChange:function(e){updP(p.id,{montant:parseFloat(e.target.value)||0});}}),
+            el("span",{style:S.eur},"€")),
+          el("button",{style:S.lineDel,onClick:function(){setPassifs(passifs.filter(function(x){return x.id!==p.id;}));}},el(Icon,{name:"trash-2",size:15})));
+      })));
+}
+
+// ---- Simulateur 4 : Échéancier fiscal ----
+function EcheancierSimulator({onBack}){
+  const [list,setList]=useState(function(){ var d=loadEcheances(); return d&&d.length?d:defaultEcheances(); });
+  useEffect(function(){ try{ localStorage.setItem(ECHEANCES_KEY,JSON.stringify(list)); }catch(e){} },[list]);
+
+  var today=new Date(); today.setHours(0,0,0,0);
+  var y=today.getFullYear();
+  function upd(id,u){ setList(list.map(function(e){return e.id===id?Object.assign({},e,u):e;})); }
+  var sorted=list.slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  var totalAvenir=list.reduce(function(s,e){
+    if(e.paid) return s;
+    var d=e.date?new Date(e.date):null;
+    if(d&&d.getFullYear()===y) return s+(e.montant||0);
+    return s;
+  },0);
+  function badge(e){
+    if(e.paid) return {txt:"Payé",bg:"#19A97918",col:"#19A979"};
+    if(!e.date) return null;
+    var d=new Date(e.date); d.setHours(0,0,0,0);
+    var diff=Math.round((d-today)/86400000);
+    if(diff<0) return {txt:"En retard",bg:"#C8516C18",col:"#C8516C"};
+    if(diff===0) return {txt:"Aujourd'hui",bg:"#E8743B18",col:"#E8743B"};
+    return {txt:"dans "+diff+" j",bg:"#1D8BCE14",col:"#1D8BCE"};
+  }
+  function fmtDate(s){ if(!s) return ""; var p=s.split("-"); if(p.length!==3) return s; return p[2]+" "+MONTHS_FR[parseInt(p[1])-1]+" "+p[0]; }
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Échéancier fiscal"),
+    el("div",{style:S.section},
+      el("div",{style:S.fieldLabel},"Total à venir cette année"),
+      bigNumber(fmt(totalAvenir),"#E8743B")),
+    el("div",{style:S.section},
+      el("div",{style:S.sectionHead},
+        el("span",{style:S.sectionTitle},el(Icon,{name:"calendar",size:16,color:"#1D8BCE"})," Échéances"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14"}),onClick:function(){setList(list.concat([{id:uid(),label:"",date:y+"-12-15",montant:0,paid:false}]));}},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Échéance")),
+      sorted.map(function(e){
+        var b=badge(e);
+        return el("div",{key:e.id,style:{padding:"10px 0",borderBottom:"1px solid var(--border-2)"}},
+          el("div",{style:{display:"flex",alignItems:"center",gap:9}},
+            el("input",{style:Object.assign({},S.lineLabelInput,e.paid?{textDecoration:"line-through",color:"var(--text-3)"}:{}),value:e.label,placeholder:"Libellé",onChange:function(ev){upd(e.id,{label:ev.target.value});}}),
+            b&&el("span",{style:{fontSize:11,fontWeight:700,background:b.bg,color:b.col,borderRadius:8,padding:"3px 8px",whiteSpace:"nowrap"}},b.txt),
+            el("button",{style:S.lineDel,onClick:function(){setList(list.filter(function(x){return x.id!==e.id;}));}},el(Icon,{name:"trash-2",size:15}))),
+          el("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6,flexWrap:"wrap"}},
+            el("input",{type:"date",value:e.date||"",onChange:function(ev){upd(e.id,{date:ev.target.value});},style:{fontSize:12.5,padding:"6px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
+            el("div",{style:Object.assign({},S.lineAmtWrap,{width:100})},
+              el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:e.montant||"",placeholder:"0",onChange:function(ev){upd(e.id,{montant:parseFloat(ev.target.value)||0});}}),
+              el("span",{style:S.eur},"€")),
+            el("button",{onClick:function(){upd(e.id,{paid:!e.paid});},style:{display:"flex",alignItems:"center",gap:5,fontSize:12.5,fontWeight:600,padding:"6px 10px",borderRadius:8,border:"none",cursor:"pointer",background:e.paid?"#19A97918":"var(--surface-2)",color:e.paid?"#19A979":"var(--text-2)"}},
+              el(Icon,{name:"check",size:14,color:e.paid?"#19A979":"var(--text-3)"}),e.paid?"Payé":"Marquer payé")),
+          el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:4}},fmtDate(e.date)));
+      })));
+}
+
+// ---- Menu Outils ----
+function OutilsScreen(){
+  const [view,setView]=useState("menu");
+  var back=function(){setView("menu");};
+  if(view==="ir") return el(IRSimulator,{onBack:back});
+  if(view==="pret") return el(LoanSimulator,{onBack:back});
+  if(view==="bilan") return el(BilanSimulator,{onBack:back});
+  if(view==="echeancier") return el(EcheancierSimulator,{onBack:back});
+  var cards=[
+    {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton impôt 2025 (revenus 2024)"},
+    {id:"pret",icon:"car",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût, capacité d'emprunt"},
+    {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Actifs − passifs = patrimoine net"},
+    {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Suivi des échéances de l'année"},
+  ];
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Outils"),
+    el("p",{style:{margin:"-6px 0 4px",fontSize:13,color:"var(--text-3)"}},"Simulateurs patrimoniaux"),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+      cards.map(function(c){
+        return el("button",{key:c.id,onClick:function(){setView(c.id);},
+          style:{display:"flex",alignItems:"center",gap:14,textAlign:"left",background:"var(--surface)",borderRadius:18,padding:16,border:"none",boxShadow:"var(--shadow-card)",cursor:"pointer"}},
+          el("div",{style:{width:46,height:46,borderRadius:13,background:c.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:c.icon,size:22,color:c.color})),
+          el("div",{style:{flex:1,minWidth:0}},
+            el("div",{style:{fontSize:15.5,fontWeight:700,color:"var(--text)"}},c.title),
+            el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginTop:2}},c.sub)),
+          el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"}));
+      })));
 }
 
 // ----------------------------------------------------------------------------
