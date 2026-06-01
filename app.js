@@ -746,7 +746,7 @@ function App(){
     }),
 
     // ---- TAB OUTILS ----
-    tab==="outils" && el(OutilsScreen,null),
+    tab==="outils" && el(OutilsScreen,{pots:pots,potBalance:potBalance}),
 
     // ---- TAB RÉGLAGES ----
     tab==="reglages" && el(SettingsScreen,{
@@ -1795,13 +1795,16 @@ function LoanSimulator({onBack}){
 }
 
 // ---- Simulateur 3 : Bilan patrimonial ----
-function BilanSimulator({onBack}){
-  const [actifs,setActifs]=useState(function(){ var d=loadPatrimoine(); return d&&d.actifs?d.actifs:[]; });
+function BilanSimulator({onBack,pots,potBalance}){
+  pots=pots||[]; potBalance=potBalance||function(){return 0;};
+  // migration douce : on ne garde en saisie manuelle que les biens NON suivis dans les cagnottes
+  // (immo, voiture, autres). Les livrets/PEA/AV/courant sont déjà dans les cagnottes.
+  const [biens,setBiens]=useState(function(){ var d=loadPatrimoine(); var a=(d&&d.actifs)?d.actifs:[]; return a; });
   const [passifs,setPassifs]=useState(function(){ var d=loadPatrimoine(); return d&&d.passifs?d.passifs:[]; });
-  useEffect(function(){ try{ localStorage.setItem(PATRIMOINE_KEY,JSON.stringify({actifs:actifs,passifs:passifs})); }catch(e){} },[actifs,passifs]);
+  useEffect(function(){ try{ localStorage.setItem(PATRIMOINE_KEY,JSON.stringify({actifs:biens,passifs:passifs})); }catch(e){} },[biens,passifs]);
 
   var nowY=new Date().getFullYear();
-  function actifValue(a){
+  function bienValue(a){
     var v=a.valeur||0;
     if(a.type==="voiture"&&a.decote>0&&a.annee){
       var years=Math.max(0,nowY-a.annee);
@@ -1809,15 +1812,24 @@ function BilanSimulator({onBack}){
     }
     return v;
   }
-  var totalActifs=actifs.reduce(function(s,a){return s+actifValue(a);},0);
+  // sources automatiques
+  var totalCagnottes=pots.reduce(function(s,p){return s+potBalance(p.id);},0);
+  var totalPlacements=placementsTotal();
+  var totalBiens=biens.reduce(function(s,a){return s+bienValue(a);},0);
+  var totalActifs=totalCagnottes+totalPlacements+totalBiens;
   var totalPassifs=passifs.reduce(function(s,p){return s+(p.montant||0);},0);
   var net=totalActifs-totalPassifs;
 
+  // répartition combinée par type (cagnottes par type + biens par type + placements)
   var byType={};
-  actifs.forEach(function(a){ var t=a.type||"autre"; byType[t]=(byType[t]||0)+actifValue(a); });
+  pots.forEach(function(p){ var t=(p.type&&POT_TYPES[p.type])?p.type:"autre"; byType[t]=(byType[t]||0)+potBalance(p.id); });
+  biens.forEach(function(a){ var t=a.type||"autre"; byType[t]=(byType[t]||0)+bienValue(a); });
+  if(totalPlacements>0) byType.salariale=(byType.salariale||0)+totalPlacements;
+  var typeMeta=Object.assign({},POT_TYPES,{salariale:{label:"Épargne salariale (PEE/PER)",color:"#945ECF"},voiture:{label:"Voiture",color:"#E8743B"}});
 
-  function updA(id,upd){ setActifs(actifs.map(function(a){return a.id===id?Object.assign({},a,upd):a;})); }
+  function updB(id,upd){ setBiens(biens.map(function(a){return a.id===id?Object.assign({},a,upd):a;})); }
   function updP(id,upd){ setPassifs(passifs.map(function(p){return p.id===id?Object.assign({},p,upd):p;})); }
+  var srcRow={display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13.5,padding:"9px 0",borderBottom:"1px solid var(--border-2)"};
 
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
@@ -1828,11 +1840,22 @@ function BilanSimulator({onBack}){
       el("div",{style:{display:"flex",gap:12,marginTop:12}},
         el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Actifs"),el("div",{style:S.patStatVal},fmt(totalActifs))),
         el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Passifs"),el("div",{style:S.patStatVal},fmt(totalPassifs))))),
+    // sources automatiques — pas de re-saisie
+    el("div",{style:S.section},
+      el("div",{style:S.sectionTitle},el(Icon,{name:"check",size:15,color:"#19A979"})," Déjà comptabilisé automatiquement"),
+      el("div",{style:{marginTop:8}},
+        el("div",{style:srcRow},
+          el("span",{style:{color:"var(--text-2)",display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"piggy-bank",size:15,color:"#1D8BCE"}),"Cagnottes (Livret A, PEA, AV…)"),
+          el("span",{style:{fontWeight:700}},fmt(totalCagnottes))),
+        el("div",{style:Object.assign({},srcRow,{borderBottom:"none"})},
+          el("span",{style:{color:"var(--text-2)",display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"briefcase",size:15,color:"#945ECF"}),"Placements (PEE/PER…)"),
+          el("span",{style:{fontWeight:700}},fmt(totalPlacements)))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"8px 0 0"}},"Repris automatiquement de tes onglets Cagnottes et Placements — inutile de les re-saisir ici.")),
     Object.keys(byType).length>0&&el("div",{style:S.section},
-      el("div",{style:S.sectionTitle},"Répartition des actifs"),
+      el("div",{style:S.sectionTitle},"Répartition du patrimoine"),
       el("div",{style:{display:"flex",flexDirection:"column",gap:10,marginTop:12}},
         Object.keys(byType).map(function(t){
-          var pt=POT_TYPES[t]||{label:t,color:"#6C8893"};
+          var pt=typeMeta[t]||{label:t,color:"#6C8893"};
           var val=byType[t];
           var pct=totalActifs>0?(val/totalActifs)*100:0;
           return el("div",{key:t},
@@ -1841,31 +1864,32 @@ function BilanSimulator({onBack}){
               el("span",{style:{color:"var(--text-3)"}},fmt(val)+" · "+pct.toFixed(0)+"%")),
             el("div",{style:S.potBarTrack},el("div",{style:Object.assign({},S.potBarFill,{width:pct+"%",background:pt.color})})));
         }))),
+    // biens à ajouter manuellement : seulement ce qui n'est pas suivi ailleurs
     el("div",{style:S.section},
       el("div",{style:S.sectionHead},
-        el("span",{style:S.sectionTitle},el(Icon,{name:"coins",size:16,color:"#19A979"})," Actifs"),
-        el("button",{style:Object.assign({},S.smallBtn,{color:"#19A979",background:"#19A97914"}),onClick:function(){setActifs(actifs.concat([{id:uid(),label:"",type:"livret",valeur:0}]));}},el(Icon,{name:"plus",size:14,color:"#19A979"})," Actif")),
-      actifs.length===0&&el("p",{style:S.blockHint},"Ajoute tes actifs (livrets, PEA, immobilier, voiture…)."),
-      actifs.map(function(a){
+        el("span",{style:S.sectionTitle},el(Icon,{name:"house",size:16,color:"#E8743B"})," Autres biens"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#E8743B",background:"#E8743B14"}),onClick:function(){setBiens(biens.concat([{id:uid(),label:"",type:"immo",valeur:0}]));}},el(Icon,{name:"plus",size:14,color:"#E8743B"})," Bien")),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"0 0 8px"}},"Ajoute ici ce qui n'est pas dans tes cagnottes : immobilier, voiture, autres comptes."),
+      biens.map(function(a){
         return el("div",{key:a.id,style:{padding:"8px 0",borderBottom:"1px solid var(--border-2)"}},
           el("div",{style:TOOL_LINE},
-            el("input",{style:S.lineLabelInput,value:a.label,placeholder:"Libellé",onChange:function(e){updA(a.id,{label:e.target.value});}}),
+            el("input",{style:S.lineLabelInput,value:a.label,placeholder:"Libellé (ex : Maison, Voiture)",onChange:function(e){updB(a.id,{label:e.target.value});}}),
             el("div",{style:Object.assign({},S.lineAmtWrap,{width:110})},
-              el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:a.valeur||"",placeholder:"0",onChange:function(e){updA(a.id,{valeur:parseFloat(e.target.value)||0});}}),
+              el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:a.valeur||"",placeholder:"0",onChange:function(e){updB(a.id,{valeur:parseFloat(e.target.value)||0});}}),
               el("span",{style:S.eur},"€")),
-            el("button",{style:S.lineDel,onClick:function(){setActifs(actifs.filter(function(x){return x.id!==a.id;}));}},el(Icon,{name:"trash-2",size:15}))),
+            el("button",{style:S.lineDel,onClick:function(){setBiens(biens.filter(function(x){return x.id!==a.id;}));}},el(Icon,{name:"trash-2",size:15}))),
           el("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}},
-            el("select",{value:a.type,onChange:function(e){updA(a.id,{type:e.target.value});},style:{fontSize:12.5,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}},
-              ["livret","pea","av","immo","voiture","courant","autre"].map(function(tk){return el("option",{key:tk,value:tk},(POT_TYPES[tk]&&POT_TYPES[tk].badge)||(tk==="voiture"?"Voiture":tk));})),
+            el("select",{value:a.type,onChange:function(e){updB(a.id,{type:e.target.value});},style:{fontSize:12.5,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}},
+              ["immo","voiture","courant","autre"].map(function(tk){return el("option",{key:tk,value:tk},(POT_TYPES[tk]&&POT_TYPES[tk].badge)||(tk==="voiture"?"Voiture":tk));})),
             a.type==="voiture"&&el(React.Fragment,null,
-              el("input",{type:"number",inputMode:"decimal",placeholder:"décote %/an",value:a.decote||"",onChange:function(e){updA(a.id,{decote:parseFloat(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
-              el("input",{type:"number",inputMode:"numeric",placeholder:"année achat",value:a.annee||"",onChange:function(e){updA(a.id,{annee:parseInt(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
-              (a.decote>0&&a.annee)&&el("span",{style:{fontSize:11.5,color:"var(--text-3)"}},"≈ "+fmt(actifValue(a))))));
+              el("input",{type:"number",inputMode:"decimal",placeholder:"décote %/an",value:a.decote||"",onChange:function(e){updB(a.id,{decote:parseFloat(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
+              el("input",{type:"number",inputMode:"numeric",placeholder:"année achat",value:a.annee||"",onChange:function(e){updB(a.id,{annee:parseInt(e.target.value)||0});},style:{width:90,fontSize:12,padding:"5px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)"}}),
+              (a.decote>0&&a.annee)&&el("span",{style:{fontSize:11.5,color:"var(--text-3)"}},"≈ "+fmt(bienValue(a))))));
       })),
     el("div",{style:S.section},
       el("div",{style:S.sectionHead},
-        el("span",{style:S.sectionTitle},el(Icon,{name:"file-text",size:16,color:"#C8516C"})," Passifs"),
-        el("button",{style:Object.assign({},S.smallBtn,{color:"#C8516C",background:"#C8516C14"}),onClick:function(){setPassifs(passifs.concat([{id:uid(),label:"",montant:0}]));}},el(Icon,{name:"plus",size:14,color:"#C8516C"})," Passif")),
+        el("span",{style:S.sectionTitle},el(Icon,{name:"file-text",size:16,color:"#C8516C"})," Dettes"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#C8516C",background:"#C8516C14"}),onClick:function(){setPassifs(passifs.concat([{id:uid(),label:"",montant:0}]));}},el(Icon,{name:"plus",size:14,color:"#C8516C"})," Dette")),
       passifs.length===0&&el("p",{style:S.blockHint},"Ajoute tes dettes (crédit immo, prêt auto…)."),
       passifs.map(function(p){
         return el("div",{key:p.id,style:TOOL_LINE},
@@ -2130,12 +2154,14 @@ function CompoundInterestSimulator({onBack}){
       el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Intérêts capitalisés mensuellement. Hypothèse de rendement constant, hors inflation et fiscalité.")));
 }
 
-function OutilsScreen(){
+function OutilsScreen(props){
   const [view,setView]=useState("menu");
   var back=function(){setView("menu");};
+  var pots=(props&&props.pots)||[];
+  var potBalance=(props&&props.potBalance)||function(){return 0;};
   if(view==="ir") return el(IRSimulator,{onBack:back});
   if(view==="pret") return el(LoanSimulator,{onBack:back});
-  if(view==="bilan") return el(BilanSimulator,{onBack:back});
+  if(view==="bilan") return el(BilanSimulator,{onBack:back,pots:pots,potBalance:potBalance});
   if(view==="echeancier") return el(EcheancierSimulator,{onBack:back});
   if(view==="pfu") return el(PfuSimulator,{onBack:back});
   if(view==="achatloc") return el(AchatLocSimulator,{onBack:back});
@@ -2218,9 +2244,9 @@ function DashboardScreen(props){
   if(patrimoine&&patrimoine.passifs) totalPassifs=patrimoine.passifs.reduce(function(s,p){return s+(p.montant||0);},0);
   var totalPlacements = placementsTotal();
   var totalCagnottes = (pots||[]).reduce(function(s,p){return s+potBalance(p.id);},0);
-  totalActifs = totalActifs + totalPlacements;
+  totalActifs = totalActifs + totalPlacements + totalCagnottes;
   var patrimoineNet = totalActifs-totalPassifs;
-  var hasPatrimoine = (patrimoine&&((patrimoine.actifs&&patrimoine.actifs.length>0)||(patrimoine.passifs&&patrimoine.passifs.length>0)))||totalPlacements>0;
+  var hasPatrimoine = (patrimoine&&((patrimoine.actifs&&patrimoine.actifs.length>0)||(patrimoine.passifs&&patrimoine.passifs.length>0)))||totalPlacements>0||totalCagnottes>0;
 
   // Echeances
   var echeancesData = loadEcheances();
@@ -2245,8 +2271,8 @@ function DashboardScreen(props){
     return Math.round((d-today)/86400000);
   }
 
-  // KPI Accueil
-  var kpiPatrimoineNet = totalActifs + totalCagnottes - totalPassifs;
+  // KPI Accueil (totalActifs inclut déjà cagnottes + placements + biens)
+  var kpiPatrimoineNet = totalActifs - totalPassifs;
   var precautionMonths = totalDep>0 ? totalCagnottes/totalDep : 0;
 
   var cardStyle={background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"};
