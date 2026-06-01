@@ -1872,6 +1872,83 @@ function GaugeBar(props){
       el("span",{style:{fontSize:11,fontWeight:700,color:currentZone.color}},currentZone.label)));
 }
 
+// ---- Simulateur : Salaire brut → net détaillé ----
+function SalaireSimulator({onBack}){
+  const [brut,setBrut]=useState("");
+  const [periode,setPeriode]=useState("mois"); // "mois" | "an"
+  const [statut,setStatut]=useState("noncadre"); // "noncadre" | "cadre"
+  const [tauxPAS,setTauxPAS]=useState("");
+  const [tempsPlein,setTempsPlein]=useState(true);
+
+  var B=parseFloat(brut)||0;
+  var brutMens=periode==="mois"?B:B/12;
+  var brutAn=brutMens*12;
+
+  // Taux de cotisations salariales moyens (estimation France 2025)
+  // Non-cadre ~22%, Cadre ~25% (tranche B, APEC, prévoyance cadre)
+  var tauxCot=statut==="cadre"?0.25:0.22;
+  var cotisations=brutMens*tauxCot;
+  var netAvantImpot=brutMens-cotisations;
+
+  // Net imposable ≈ net + CSG/CRDS non déductible (~2.9% du brut)
+  var csgNonDed=brutMens*0.029;
+  var netImposable=netAvantImpot+csgNonDed;
+
+  // Prélèvement à la source
+  var pas=parseFloat(tauxPAS)||0;
+  var prelevement=netImposable*pas/100;
+  var netApresImpot=netAvantImpot-prelevement;
+
+  var coutEmployeur=brutMens*(statut==="cadre"?1.45:1.42); // charges patronales ~42-45%
+
+  var ratioNet=brutMens>0?(netAvantImpot/brutMens)*100:0;
+
+  var ligne=function(label,val,color,bold){
+    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"7px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+      el("span",{style:{color:"var(--text-2)",fontWeight:bold?700:400}},label),
+      el("span",{style:{fontWeight:bold?800:600,color:color||"var(--text)"}},val));
+  };
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Salaire brut → net"),
+    el(ToolInfo,{color:"#1D8BCE"},"Estime ton salaire net à partir du brut, avec le détail des cotisations. Les taux sont des moyennes : non-cadre ≈ 22 % de cotisations salariales, cadre ≈ 25 %. Renseigne ton taux de prélèvement à la source (sur ta fiche de paie) pour obtenir le net après impôt."),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Salaire brut"),
+      el("div",{style:{display:"flex",gap:10,marginBottom:12}},
+        el("input",{type:"number",inputMode:"decimal",style:Object.assign({},S.input,{flex:2}),value:brut,placeholder:"ex : 3000",onChange:function(e){setBrut(e.target.value);}}),
+        el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2,flex:1}},
+          [["mois","/ mois"],["an","/ an"]].map(function(o){
+            var on=periode===o[0];
+            return el("button",{key:o[0],onClick:function(){setPeriode(o[0]);},
+              style:{flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13,cursor:"pointer"}},o[1]);
+          }))),
+      el("label",{style:S.fieldLabel},"Statut"),
+      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2,marginBottom:12}},
+        [["noncadre","Non-cadre"],["cadre","Cadre"]].map(function(o){
+          var on=statut===o[0];
+          return el("button",{key:o[0],onClick:function(){setStatut(o[0]);},
+            style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
+        })),
+      el("label",{style:S.fieldLabel},"Taux de prélèvement à la source (%) — optionnel"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS,placeholder:"ex : 5.3",onChange:function(e){setTauxPAS(e.target.value);}})),
+    B>0?el("div",{style:S.section},
+      el("div",{style:{textAlign:"center",marginBottom:16}},
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginBottom:4}},pas>0?"Net après impôt / mois":"Net avant impôt / mois"),
+        bigNumber(fmt(pas>0?netApresImpot:netAvantImpot),"#19A979"),
+        el("div",{style:{fontSize:13,color:"var(--text-3)",marginTop:4}},"soit "+fmt((pas>0?netApresImpot:netAvantImpot)*12)+" / an")),
+      ligne("Salaire brut",fmt(brutMens)),
+      ligne("− Cotisations salariales ("+Math.round(tauxCot*100)+"%)",fmt(-cotisations),"#C8516C"),
+      ligne("Net avant impôt",fmt(netAvantImpot),"#19A979",true),
+      pas>0?ligne("− Prélèvement à la source ("+pas+"%)",fmt(-prelevement),"#E8743B"):null,
+      pas>0?ligne("Net après impôt",fmt(netApresImpot),"#19A979",true):null,
+      el("div",{style:{display:"flex",gap:12,marginTop:16,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net imposable / mois"),el("div",{style:S.bilanVal},fmt(netImposable))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Part nette du brut"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},ratioNet.toFixed(0)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Coût employeur / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#945ECF"})},fmt(coutEmployeur)))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative. Les taux réels varient selon ta convention collective, ta mutuelle, les heures supplémentaires et les avantages. Référez-vous à votre fiche de paie pour les chiffres exacts.")):null);
+}
+
 // ---- Simulateur 1 : Impôt sur le revenu ----
 function IRSimulator({onBack}){
   const [revenu,setRevenu]=useState("");
@@ -1882,7 +1959,14 @@ function IRSimulator({onBack}){
   const [domicile,setDomicile]=useState("");
   const [gardeNb,setGardeNb]=useState(0);
   const [gardeDep,setGardeDep]=useState("");
-  var R=parseFloat(revenu)||0;
+  const [detailConjoint,setDetailConjoint]=useState(false);
+  const [revenu1,setRevenu1]=useState("");
+  const [revenu2,setRevenu2]=useState("");
+  var couple=situation==="couple";
+  var rev1=parseFloat(revenu1)||0;
+  var rev2=parseFloat(revenu2)||0;
+  var useDetail=couple&&detailConjoint;
+  var R=useDetail?(rev1+rev2):(parseFloat(revenu)||0);
   var parts=irParts(situation,enfants);
   var partsBase=situation==="couple"?2:1;
   var demiPartsEnfants=(parts-partsBase)*2;
@@ -1920,15 +2004,25 @@ function IRSimulator({onBack}){
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Impôt sur le revenu"),
     el(ToolInfo,{color:"#C8516C"},"Estime ton impôt net à payer sur tes revenus de l'année. Renseigne ton revenu net imposable (salaire après abattement 10 %), ta situation (célibataire, couple, enfants) et les éventuelles réductions (dons, garde d'enfants). Le résultat est une estimation — ton avis d'imposition officiel peut différer."),
     el("div",{style:S.section},
-      el("label",{style:S.fieldLabel},"Revenu net imposable annuel du foyer (€)"),
-      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 60000",onChange:function(e){setRevenu(e.target.value);}}),
-      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Situation"),
-      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+      el("label",{style:S.fieldLabel},"Situation"),
+      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2,marginBottom:14}},
         [["celibataire","Célibataire"],["couple","Couple"]].map(function(o){
           var on=situation===o[0];
           return el("button",{key:o[0],onClick:function(){setSituation(o[0]);},
             style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
         })),
+      couple?el("button",{onClick:function(){setDetailConjoint(!detailConjoint);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:"transparent",cursor:"pointer",padding:0,marginBottom:10}},
+        el("span",{style:{fontSize:13,color:"var(--text-2)",fontWeight:600}},"Détailler les revenus par déclarant"),
+        el("span",{style:{width:42,height:24,borderRadius:12,background:detailConjoint?"#C8516C":"var(--border)",position:"relative",transition:"background .2s"}},
+          el("span",{style:{position:"absolute",top:2,left:detailConjoint?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))):null,
+      useDetail?el("div",null,
+        el("div",{style:{display:"flex",gap:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Déclarant 1 (€/an)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu1,placeholder:"ex : 35000",onChange:function(e){setRevenu1(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Déclarant 2 (€/an)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu2,placeholder:"ex : 25000",onChange:function(e){setRevenu2(e.target.value);}}))),
+        R>0?el("div",{style:{marginTop:8,fontSize:13,color:"var(--text-3)"}},"Revenu net imposable du foyer : ",el("strong",{style:{color:"var(--text)"}},fmt(R))):null
+      ):el("div",null,
+        el("label",{style:S.fieldLabel},"Revenu net imposable annuel du foyer (€)"),
+        el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 60000",onChange:function(e){setRevenu(e.target.value);}})),
       el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Nombre d'enfants à charge"),
       el("div",{style:{display:"flex",alignItems:"center",gap:12}},
         el("button",{onClick:function(){setEnfants(Math.max(0,enfants-1));},style:S.navBtn},el(Icon,{name:"chevron-left",size:18})),
@@ -1966,6 +2060,26 @@ function IRSimulator({onBack}){
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux moyen"),el("div",{style:S.bilanVal},tauxMoyen.toFixed(1)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux marginal"),el("div",{style:S.bilanVal},tauxMarginal.toFixed(0)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net après impôt / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(netMensuel)))),
+      useDetail&&R>0?el("div",null,
+        el("div",{style:{height:1,background:"var(--border-2)",margin:"16px 0"}}),
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"Répartition par déclarant (au prorata des revenus)"),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          [{n:"Déclarant 1",v:rev1},{n:"Déclarant 2",v:rev2}].map(function(d,i){
+            var part=R>0?d.v/R:0;
+            var impotD=Math.max(0,impotNet)*part;
+            var netD=d.v-impotD;
+            return el("div",{key:i,style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+                el("span",{style:{color:"var(--text-2)",fontWeight:700}},d.n),
+                el("span",{style:{fontSize:12,color:"var(--text-3)"}},(part*100).toFixed(0)+" % du foyer")),
+              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12.5}},
+                el("span",{style:{color:"var(--text-3)"}},"Quote-part d'impôt"),
+                el("span",{style:{fontWeight:700,color:"#C8516C"}},fmt(impotD))),
+              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12.5}},
+                el("span",{style:{color:"var(--text-3)"}},"Net après sa quote-part"),
+                el("span",{style:{fontWeight:700,color:"#19A979"}},fmt(netD))));
+          })),
+        el("p",{style:{fontSize:11,color:"var(--text-4)",margin:"8px 0 0"}},"Répartition indicative au prorata des revenus. L'imposition commune reste calculée sur le foyer entier.")):null,
       el("div",{style:{height:1,background:"var(--border-2)",margin:"16px 0"}}),
       el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"Décomposition par tranche"),
       el("div",{style:{overflowX:"auto"}},
@@ -2592,8 +2706,9 @@ function ProjectionSimulator(props){
       el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Intérêts capitalisés mensuellement. Hypothèse de rendement constant, hors inflation et fiscalité.")));
 }
 
-// ---- Simulateur : Achat immobilier vs Location ----
+// ---- Simulateur immobilier : Prêt & Achat vs Location ----
 function ImmoSimulator({onBack}){
+  const [view2,setView2]=useState("pretimmo"); // "pretimmo" | "achatloc"
   const [prix,setPrix]=useState("");
   const [apport,setApport]=useState("");
   const [taux,setTaux]=useState("3.5");
@@ -2601,6 +2716,10 @@ function ImmoSimulator({onBack}){
   const [fraisNotaire,setFraisNotaire]=useState("7.5");
   const [chargesAchat,setChargesAchat]=useState("0");
   const [appreciation,setAppreciation]=useState("2");
+  const [assurance,setAssurance]=useState("0.36");
+  const [revMensImmo,setRevMensImmo]=useState("");
+  const [chargesExist,setChargesExist]=useState("");
+  const [showTableImmo,setShowTableImmo]=useState(false);
   const [loyer,setLoyer]=useState("");
   const [chargesLoc,setChargesLoc]=useState("0");
   const [revaloLoc,setRevaloLoc]=useState("1.5");
@@ -2610,6 +2729,7 @@ function ImmoSimulator({onBack}){
   var P=parseFloat(prix)||0;
   var Ap=parseFloat(apport)||0;
   var capital=P-Ap;
+  if(capital<0) capital=0;
   var tauxAn=parseFloat(taux)||3.5;
   var n=(parseFloat(duree)||20)*12;
   var fn=parseFloat(fraisNotaire)||7.5;
@@ -2623,6 +2743,48 @@ function ImmoSimulator({onBack}){
 
   var r=tauxAn/100/12;
   var mensualite=capital>0&&r>0?capital*r/(1-Math.pow(1+r,-n)):capital>0?capital/n:0;
+  var assPct=parseFloat(assurance)||0;
+  var assMens=capital*assPct/100/12;
+  var mensTotale=mensualite+assMens;
+  var totalPaidImmo=mensualite*n;
+  var coutCreditImmo=totalPaidImmo-capital;
+  var revMI=parseFloat(revMensImmo)||0;
+  var chExist=parseFloat(chargesExist)||0;
+  var tauxEndetImmo=revMI>0?((mensTotale+chExist)/revMI)*100:0;
+  var resteAVivre=revMI-mensTotale-chExist;
+  var endetZonesImmo=[
+    {max:25,color:"#19A979",label:"Excellent — zone très confortable"},
+    {max:33,color:"#F2B53C",label:"Acceptable — limite recommandée des banques"},
+    {max:40,color:"#E8743B",label:"Élevé — au-delà du seuil HCSF (35 %)"},
+    {max:100,color:"#C8516C",label:"Très élevé — financement difficile"}
+  ];
+  // Capacité : mensualité max à 35 % moins charges existantes
+  var seuilEndet=0.35;
+  var mensMax35=revMI>0?(revMI*seuilEndet-chExist):0;
+  if(mensMax35<0) mensMax35=0;
+  // marge restante avant 35 %
+  var margeMens=mensMax35-mensTotale;
+  // capital empruntable supplémentaire avec cette marge (hors assurance approx)
+  var capacitePlus=0;
+  if(margeMens>0&&r>0){ capacitePlus=margeMens*(1-Math.pow(1+r,-n))/r; }
+  else if(margeMens>0){ capacitePlus=margeMens*n; }
+  // capital total finançable à 35 %
+  var capitalMax=0;
+  if(mensMax35>0&&r>0){ capitalMax=mensMax35*(1-Math.pow(1+r,-n))/r; }
+  else if(mensMax35>0){ capitalMax=mensMax35*n; }
+
+  // tableau amortissement immo (max 12 ans affichés)
+  var rowsImmo=[];
+  if(capital>0&&n>0&&mensualite>0){
+    var si=capital, yi=0;
+    var maxY=Math.ceil(n/12);
+    for(var yi2=0;yi2<maxY&&yi2<12;yi2++){
+      var capR=0, intR=0;
+      for(var mo2=0;mo2<12&&yi<n;mo2++){ var iM=si*r; var cM=mensualite-iM; si-=cM; intR+=iM; capR+=cM; yi++; }
+      if(si<0) si=0;
+      rowsImmo.push({an:yi2+1,cap:capR,int:intR,reste:si});
+    }
+  }
   var fraisNotaireEur=P*fn/100;
   var revente=P*Math.pow(1+appAn/100,DA);
   var coutAchat=(mensualite*12*DA)+fraisNotaireEur+(chAn*DA)-revente+Ap;
@@ -2661,100 +2823,107 @@ function ImmoSimulator({onBack}){
         best?el("span",{style:{fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:12,background:"#19A979",color:"#fff"}},"MOINS CHER"):null),
       el("div",{style:{fontSize:22,fontWeight:800,color:best?"#19A979":"var(--text)"}},P>0?fmt(val):"—"));
   };
-  var row=function(lbl,val,unit){
-    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}},
-      el("span",{style:{color:"var(--text-3)"}}),
-      el("span",{style:{fontWeight:600}}));
-  };
-  void row;
+
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
-    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location immobilier"),
-    el(ToolInfo,{color:"#19A979"},"La question clé : à partir de quand acheter coûte moins cher que louer ? Ce simulateur compare le coût total sur X ans (mensualités + notaire + charges − revente estimée) versus les loyers cumulés. L'apport investi ailleurs (coût d'opportunité) est aussi pris en compte pour une comparaison juste."),
-    el("div",{style:S.section},
-      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Achat"),
-      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Prix du bien (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:prix,placeholder:"ex : 300000",onChange:function(e){setPrix(e.target.value);}})),
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Apport (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:apport,placeholder:"ex : 60000",onChange:function(e){setApport(e.target.value);}}))),
-      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux prêt (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}})),
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée prêt (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:duree,onChange:function(e){setDuree(e.target.value);}}))),
-      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Frais notaire (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:fraisNotaire,onChange:function(e){setFraisNotaire(e.target.value);}})),
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges/taxe (€/an)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesAchat,onChange:function(e){setChargesAchat(e.target.value);}}))),
-      el("div",{style:{flex:1,marginBottom:0}},el("label",{style:S.fieldLabel},"Appréciation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:appreciation,onChange:function(e){setAppreciation(e.target.value);}})),
-      capital>0&&el("div",{style:{marginTop:8,fontSize:13,color:"var(--text-3)"}},"Mensualité estimée : ",el("strong",null,fmt(mensualite))," / mois — Frais notaire : ",el("strong",null,fmt(fraisNotaireEur)))),
-    el("div",{style:S.section},
-      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Location"),
-      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Loyer mensuel (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:loyer,placeholder:"ex : 1200",onChange:function(e){setLoyer(e.target.value);}})),
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges loc. (€/mois)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesLoc,onChange:function(e){setChargesLoc(e.target.value);}}))),
-      el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Revalorisation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revaloLoc,onChange:function(e){setRevaloLoc(e.target.value);}}))),
-    el("div",{style:S.section},
-      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Paramètres communs"),
-      el("div",{style:{display:"flex",gap:10}},
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée d'analyse (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:dureeAnalyse,onChange:function(e){setDureeAnalyse(e.target.value);}})),
-        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Rendement placement apport (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:rendPlacement,onChange:function(e){setRendPlacement(e.target.value);}})))),
-    P>0&&loyerM>0&&el("div",{style:S.section},
-      el("div",{style:{fontWeight:700,fontSize:15,marginBottom:12}},"Résultat sur "+DA+" ans"),
-      el("div",{style:{display:"flex",gap:12,marginBottom:12}},
-        optBox("Coût net achat",coutAchat,achatGagne),
-        optBox("Coût net location",coutLocNet,!achatGagne)),
-      pointMort>0&&el("div",{style:{fontSize:13,color:"var(--text-3)",marginBottom:8}},
-        "Point mort estimé : ",el("strong",{style:{color:"#19A979"}},pointMort+" ans")," (l'achat devient moins cher)"),
-      pointMort>0&&el("div",{style:{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:pointMort<5?"#19A97918":pointMort<10?"#F2B53C18":pointMort<15?"#E8743B18":"#C8516C18",border:"1px solid "+(pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C")+"44",marginBottom:12}},
-        el("span",{style:{fontSize:12,fontWeight:700,color:pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C"}},
-          pointMort<5?"Acheter est clairement avantageux":pointMort<10?"Acheter devient intéressant à moyen terme":pointMort<15?"Dépend de ton horizon, restez vigilant":"Louer peut être plus rationnel sur cette durée")),
-      el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
-      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Indicateurs contextuels"),
-      el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-        (function(){
-          var effortMensuel=mensualite+(chAn/12)-loyerM;
-          var rendLocatif=P>0&&loyerM>0?(loyerM*12/P)*100:0;
-          var intPremier=capital>0?capital*(tauxAn/100/12):0;
-          var capPremier=mensualite-intPremier;
-          var soldeFinPret=0;
-          var intDernier=0, capDernier=0;
-          if(capital>0&&n>0){
-            var rr=tauxAn/100/12, s=capital;
-            for(var mm=0;mm<n-1;mm++){ s-=(mensualite-s*rr); }
-            if(s<0) s=0;
-            intDernier=s*rr; capDernier=mensualite-intDernier;
-          }
-          return [
-            capital>0&&el("div",{key:"effort",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
-              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
-                el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Effort mensuel vs location"),
-                el("span",{style:{fontWeight:700,color:effortMensuel>0?"#E8743B":"#19A979"}},effortMensuel>0?"+":"")+fmt(effortMensuel)),
-              el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:4}},
-                effortMensuel>0?"Acheter coûte "+fmt(effortMensuel)+" de plus par mois que louer":"Acheter coûte moins cher que louer chaque mois")),
-            P>0&&loyerM>0&&el("div",{key:"rend",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
-              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
-                el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Rendement locatif implicite"),
-                el("span",{style:{fontWeight:700,color:rendLocatif>=5?"#19A979":rendLocatif>=3?"#F2B53C":"#C8516C"}},rendLocatif.toFixed(2)+" %")),
-              el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:4}},"Loyer annuel / prix — un taux bas indique un bien cher par rapport au marché locatif")),
-            capital>0&&el("div",{key:"amort",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
-              el("div",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Amortissement 1ère vs dernière mensualité"),
-              el("div",{style:{display:"flex",gap:16}},
-                el("div",null,
-                  el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:3}},"1ère mensualité — "+fmt(mensualite)),
-                  el("div",{style:{display:"flex",height:8,borderRadius:8,overflow:"hidden",width:120}},
-                    el("div",{style:{width:mensualite>0?(capPremier/mensualite*100)+"%":"0%",background:"#19A979"}}),
-                    el("div",{style:{flex:1,background:"#E8743B"}})),
-                  el("div",{style:{display:"flex",gap:8,marginTop:4,fontSize:11}},
-                    el("span",{style:{color:"#19A979"}},fmt(capPremier)+" capital"),
-                    el("span",{style:{color:"#E8743B"}},fmt(intPremier)+" intérêts"))),
-                el("div",null,
-                  el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:3}},"Dernière mensualité"),
-                  el("div",{style:{display:"flex",height:8,borderRadius:8,overflow:"hidden",width:120}},
-                    el("div",{style:{width:mensualite>0?(capDernier/mensualite*100)+"%":"0%",background:"#19A979"}}),
-                    el("div",{style:{flex:1,background:"#E8743B"}})),
-                  el("div",{style:{display:"flex",gap:8,marginTop:4,fontSize:11}},
-                    el("span",{style:{color:"#19A979"}},fmt(capDernier)+" capital"),
-                    el("span",{style:{color:"#E8743B"}},fmt(intDernier)+" intérêts")))))
-          ];
-        })()),
-      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"12px 0 0"}},"Hors inflation, hypothèses simplifiées. Coût net achat = mensualités + frais notaire + charges − valeur revente. Coût net location = loyers + charges − rendement sur l'apport placé.")));
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Simulateur immobilier"),
+    el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:12,padding:3,gap:2}},
+      [["pretimmo","Prêt immobilier"],["achatloc","Achat vs Location"]].map(function(o){
+        var on=view2===o[0];
+        return el("button",{key:o[0],onClick:function(){setView2(o[0]);},
+          style:{flex:1,padding:"10px 4px",borderRadius:10,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13.5,cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.1)":"none"}},o[1]);
+      })),
+
+    view2==="pretimmo"?el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+      el(ToolInfo,{color:"#1D8BCE"},"Calcule ta mensualité réelle (assurance comprise), ton taux d'endettement, ce qu'il te reste pour vivre et ta capacité d'emprunt. Les banques appliquent le seuil HCSF : un endettement maximum de 35 % des revenus nets, assurance incluse."),
+      el("div",{style:S.section},
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Prix du bien (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:prix,placeholder:"ex : 300000",onChange:function(e){setPrix(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Apport (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:apport,placeholder:"ex : 60000",onChange:function(e){setApport(e.target.value);}}))),
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux annuel (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:duree,onChange:function(e){setDuree(e.target.value);}}))),
+        el("div",{style:{display:"flex",gap:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Assurance (% annuel)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:assurance,placeholder:"ex : 0.36",onChange:function(e){setAssurance(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Frais notaire (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:fraisNotaire,onChange:function(e){setFraisNotaire(e.target.value);}})))),
+      el("div",{style:S.section},
+        el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Tes revenus & charges (pour l'endettement)"),
+        el("div",{style:{display:"flex",gap:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Revenus nets foyer (€/mois)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revMensImmo,placeholder:"ex : 4500",onChange:function(e){setRevMensImmo(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Crédits en cours (€/mois)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesExist,placeholder:"ex : 200",onChange:function(e){setChargesExist(e.target.value);}})))),
+      capital>0?el("div",{style:S.section},
+        el("div",{style:S.fieldLabel},"Mensualité totale (assurance comprise)"),
+        bigNumber(fmt(mensTotale),"#1D8BCE"),
+        el("div",{style:{fontSize:13,color:"var(--text-2)",marginTop:4}},fmt(mensualite)," capital+intérêts",assMens>0?" + "+fmt(assMens)+" assurance":""),
+        el("div",{style:{background:"#E8743B0f",border:"1px solid #E8743B28",borderRadius:12,padding:"12px 14px",marginTop:14}},
+          el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:4}},"Coût total des intérêts"),
+          el("div",{style:{fontSize:22,fontWeight:800,color:"#E8743B"}},fmt(coutCreditImmo)),
+          el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:4}},"Total remboursé : "+fmt(totalPaidImmo)+" — Capital : "+fmt(capital))),
+        el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+          el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Capital emprunté"),el("div",{style:S.bilanVal},fmt(capital))),
+          el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Frais de notaire (~"+fn+"%)"),el("div",{style:Object.assign({},S.bilanVal,{color:"#E8743B"})},fmt(fraisNotaireEur))))):null,
+      revMI>0?el("div",{style:S.section},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Taux d'endettement"),
+        el(GaugeBar,{value:tauxEndetImmo,unit:"%",zones:endetZonesImmo}),
+        el("div",{style:{display:"flex",gap:12,marginTop:16,flexWrap:"wrap"}},
+          el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Reste à vivre / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:resteAVivre>=0?"#19A979":"#C8516C"})},fmt(resteAVivre))),
+          el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Mensualité max (35 %)"),el("div",{style:S.bilanVal},fmt(mensMax35)))),
+        el("div",{style:{marginTop:14,padding:"12px 14px",borderRadius:12,background:tauxEndetImmo<=33?"#19A97912":tauxEndetImmo<=35?"#F2B53C14":"#C8516C12",border:"1px solid "+(tauxEndetImmo<=33?"#19A97933":tauxEndetImmo<=35?"#F2B53C44":"#C8516C33")}},
+          el("div",{style:{fontSize:13,fontWeight:800,marginBottom:6,color:tauxEndetImmo<=33?"#19A979":tauxEndetImmo<=35?"#E8743B":"#C8516C"}},"Conseil"),
+          el("div",{style:{fontSize:12.5,color:"var(--text-2)",lineHeight:1.55}},
+            tauxEndetImmo<=33?("Tu es sous le seuil prudent de 33 %. Il te reste "+fmt(margeMens)+" de marge mensuelle avant 35 % — soit la possibilité d'emprunter environ "+fmt(capacitePlus)+" de plus sur la même durée."):
+            tauxEndetImmo<=35?("Tu es entre 33 % et 35 % : finançable mais sans marge. Marge restante avant 35 % : "+fmt(margeMens)+". Au-delà, la banque demandera un meilleur apport ou une durée plus longue."):
+            ("Tu dépasses le seuil HCSF de 35 %. Pour repasser sous la limite, vise une mensualité max de "+fmt(mensMax35)+" (soit un capital d'environ "+fmt(capitalMax)+" sur cette durée) ou augmente ton apport.")))):null,
+      rowsImmo.length>0?el("div",{style:S.section},
+        el("button",{onClick:function(){setShowTableImmo(!showTableImmo);},style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14"})},showTableImmo?"Masquer l'amortissement":"Voir le tableau d'amortissement"),
+        showTableImmo?el("div",{style:{marginTop:12,overflowX:"auto"}},
+          el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5}},
+            el("thead",null,el("tr",null,
+              ["Année","Capital remb.","Intérêts","Restant dû"].map(function(h){return el("th",{key:h,style:{textAlign:h==="Année"?"left":"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:700,borderBottom:"1px solid var(--border-2)"}},h);}))),
+            el("tbody",null,rowsImmo.map(function(rw){
+              return el("tr",{key:rw.an},
+                el("td",{style:{padding:"6px 4px",fontWeight:600}},rw.an),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#19A979"}},fmt(rw.cap)),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#E8743B"}},fmt(rw.int)),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-3)"}},fmt(rw.reste)));
+            })))):null):null
+    ):el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+      el(ToolInfo,{color:"#19A979"},"La question clé : à partir de quand acheter coûte moins cher que louer ? Ce simulateur compare le coût total sur X ans (mensualités + notaire + charges − revente estimée) versus les loyers cumulés, en tenant compte du rendement de l'apport s'il était placé."),
+      el("div",{style:S.section},
+        el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Achat"),
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Prix du bien (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:prix,placeholder:"ex : 300000",onChange:function(e){setPrix(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Apport (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:apport,placeholder:"ex : 60000",onChange:function(e){setApport(e.target.value);}}))),
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux prêt (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée prêt (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:duree,onChange:function(e){setDuree(e.target.value);}}))),
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Frais notaire (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:fraisNotaire,onChange:function(e){setFraisNotaire(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges/taxe (€/an)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesAchat,onChange:function(e){setChargesAchat(e.target.value);}}))),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Appréciation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:appreciation,onChange:function(e){setAppreciation(e.target.value);}})),
+        capital>0?el("div",{style:{marginTop:8,fontSize:13,color:"var(--text-3)"}},"Mensualité estimée : ",el("strong",null,fmt(mensualite))," / mois — Frais notaire : ",el("strong",null,fmt(fraisNotaireEur))):null),
+      el("div",{style:S.section},
+        el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Location"),
+        el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Loyer mensuel (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:loyer,placeholder:"ex : 1200",onChange:function(e){setLoyer(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges loc. (€/mois)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesLoc,onChange:function(e){setChargesLoc(e.target.value);}}))),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Revalorisation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revaloLoc,onChange:function(e){setRevaloLoc(e.target.value);}}))),
+      el("div",{style:S.section},
+        el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Paramètres communs"),
+        el("div",{style:{display:"flex",gap:10}},
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée d'analyse (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:dureeAnalyse,onChange:function(e){setDureeAnalyse(e.target.value);}})),
+          el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Rendement placement apport (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:rendPlacement,onChange:function(e){setRendPlacement(e.target.value);}})))),
+      P>0&&loyerM>0?el("div",{style:S.section},
+        el("div",{style:{fontWeight:700,fontSize:15,marginBottom:12}},"Résultat sur "+DA+" ans"),
+        el("div",{style:{display:"flex",gap:12,marginBottom:12}},
+          optBox("Coût net achat",coutAchat,achatGagne),
+          optBox("Coût net location",coutLocNet,!achatGagne)),
+        pointMort>0?el("div",{style:{fontSize:13,color:"var(--text-3)",marginBottom:8}},
+          "Point mort estimé : ",el("strong",{style:{color:"#19A979"}},pointMort+" ans")," (l'achat devient moins cher)"):null,
+        pointMort>0?el("div",{style:{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:pointMort<5?"#19A97918":pointMort<10?"#F2B53C18":pointMort<15?"#E8743B18":"#C8516C18",border:"1px solid "+(pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C")+"44"}},
+          el("span",{style:{fontSize:12,fontWeight:700,color:pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C"}},
+            pointMort<5?"Acheter est clairement avantageux":pointMort<10?"Acheter devient intéressant à moyen terme":pointMort<15?"Dépend de ton horizon, reste vigilant":"Louer peut être plus rationnel sur cette durée")):null,
+        el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"14px 0 0"}},"Hors inflation, hypothèses simplifiées. Coût net achat = mensualités + frais notaire + charges − valeur de revente. Coût net location = loyers + charges − rendement sur l'apport placé.")):null));
 }
 
 // ---- Simulateur : PER — déduction fiscale ----
@@ -2890,6 +3059,7 @@ function OutilsScreen(props){
   var potBalance=(props&&props.potBalance)||function(){return 0;};
   var startCapital=(props&&props.startCapital)||0;
   if(view==="ir") return el(IRSimulator,{onBack:back});
+  if(view==="salaire") return el(SalaireSimulator,{onBack:back});
   if(view==="pret") return el(LoanSimulator,{onBack:back});
   if(view==="bilan") return el(BilanSimulator,{onBack:back,pots:pots,potBalance:potBalance});
   if(view==="echeancier") return el(EcheancierSimulator,{onBack:back});
@@ -2904,6 +3074,7 @@ function OutilsScreen(props){
       label:"Fiscalité",icon:"percent",color:"#C8516C",
       tools:[
         {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton IR 2025 selon tes revenus, situation familiale et parts fiscales"},
+        {id:"salaire",icon:"coins",color:"#1D8BCE",title:"Salaire brut → net",sub:"Détail des cotisations, net imposable, net après impôt et coût employeur"},
         {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Compare les 2 régimes d'imposition sur tes dividendes ou plus-values mobilières"},
         {id:"per",icon:"briefcase",color:"#945ECF",title:"PER — déduction fiscale",sub:"Calcule ton économie d'impôt immédiate et ton capital estimé à la retraite"},
         {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Centralise tes échéances (CFE, taxe foncière, acomptes IR…) pour ne rien oublier"},
