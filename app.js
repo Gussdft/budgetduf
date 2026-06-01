@@ -785,6 +785,8 @@ function App(){
         }},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
         el("button",{style:S.resetBtn,onClick:function(){setModal({kind:"confirmaction",title:"Réinitialiser le mois",message:"Supprimer toutes les lignes et versements de ce mois ?",onConfirm:function(){withSnapshot("Réinitialisation annulée",resetMonth);}});}},
           "Réinitialiser")),
+      el("button",{style:Object.assign({},S.copyBtn,{color:"#19A979",borderColor:"#19A97944",background:"#19A97910",justifyContent:"center"}),onClick:function(){setModal({kind:"import"});}},
+        el(Icon,{name:"upload",size:14,color:"#19A979"})," Importer depuis l'appli bancaire"),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
@@ -851,6 +853,17 @@ function App(){
       onClose:()=>setModal(null),
       onConfirm:function(){modal.onConfirm();setModal(null);}}),
 
+    (modal&&modal.kind==="import") && el(ImportModal,{onClose:function(){setModal(null);},onImport:function(txs){
+      setMonthData(function(c){
+        var next=Object.assign({},c);
+        txs.forEach(function(t){
+          var k=t.kind;
+          next[k]=(next[k]||[]).concat([{id:uid(),label:t.label,amount:t.amount}]);
+        });
+        return next;
+      });
+      setModal(null);
+    }}),
     (modal&&modal.kind==="quickadd") && el(QuickAddModal,{amount:modal.amount,label:modal.label,onClose:function(){setModal(null);},onSave:function(kind,label,amount){addLine(kind,label);setAmount(kind,label,amount);setModal(null);},onSaveNew:function(kind,lbl,amt){setMonthData(function(c){return Object.assign({},c,{[kind]:c[kind].concat([{id:uid(),label:lbl,amount:amt}])});});setModal(null);}}),
 
     // ---- Toast Annuler ----
@@ -1564,6 +1577,87 @@ function ConfirmModal({title,message,onClose,onConfirm}){
     el("div",{style:{display:"flex",gap:10}},
       el("button",{style:{...S.saveBtn,background:"var(--surface-3)",color:"var(--text-2)",boxShadow:"none",flex:1},onClick:onClose},"Annuler"),
       el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44",flex:1},onClick:onConfirm},"Supprimer")));
+}
+
+// ---- Import transactions bancaires (copier-coller) ----
+function parseTransactions(text){
+  var lines=text.split('\n');
+  var results=[];
+  // Regex : montant FR format ex "1,35 €" ou "1 235,00 €" en fin de ligne ou avant "›"
+  var amtRe=/([\d\s]+[,.][\d]{2})\s*€/;
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].replace(/›/g,'').trim();
+    var m=line.match(amtRe);
+    if(!m) continue;
+    var amtStr=m[1].replace(/\s/g,'').replace(',','.');
+    var amt=parseFloat(amtStr);
+    if(isNaN(amt)||amt<=0) continue;
+    // merchant = tout ce qui est avant le montant
+    var merchant=line.slice(0,line.lastIndexOf(m[0])).replace(/\s{2,}/g,' ').trim();
+    if(!merchant) continue;
+    // ignorer les lignes qui ressemblent à des localisations ou dates
+    if(/^(il y a|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier|aujourd)/i.test(merchant)) continue;
+    results.push({id:uid(),label:merchant,amount:amt,kind:"variable",checked:true});
+  }
+  return results;
+}
+
+function ImportModal(props){
+  var onClose=props.onClose, onImport=props.onImport;
+  var [step,setStep]=useState(1);
+  var [text,setText]=useState("");
+  var [txs,setTxs]=useState([]);
+  var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"]];
+
+  function parse(){
+    var parsed=parseTransactions(text);
+    if(parsed.length===0){alert("Aucune transaction détectée. Vérifie le texte collé.");return;}
+    setTxs(parsed);
+    setStep(2);
+  }
+  function toggle(id){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{checked:!t.checked}):t;})); }
+  function setKind(id,k){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{kind:k}):t;})); }
+  function doImport(){
+    var sel=txs.filter(function(t){return t.checked;});
+    onImport(sel);
+  }
+  var selected=txs.filter(function(t){return t.checked;});
+  var total=selected.reduce(function(s,t){return s+t.amount;},0);
+
+  if(step===1) return el(Modal,{title:"📋 Importer des transactions",onClose:onClose},
+    el("p",{style:{fontSize:13,color:"var(--text-2)",marginBottom:12,lineHeight:1.5}},
+      "Dans ton appli bancaire, ",el("strong",null,"sélectionne toutes les transactions"),", copie-les, puis colle ici."),
+    el("textarea",{
+      style:{width:"100%",minHeight:160,padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border-3)",background:"var(--field-bg)",color:"var(--text)",fontSize:13,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none"},
+      placeholder:"Colle ici le texte copié depuis ton appli bancaire…\n\nEx :\nCarrefour    47,50 €\nAmiens\nHier\n\nNetflix    13,99 €\nInternet\nMardi",
+      value:text,
+      onChange:function(e){setText(e.target.value);}
+    }),
+    el("button",{style:Object.assign({},S.saveBtn,{marginTop:14}),onClick:parse},"Analyser les transactions"));
+
+  return el(Modal,{title:"📋 "+txs.length+" transactions détectées",onClose:onClose},
+    el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:10}},
+      selected.length+" sélectionnées · "+fmt(total)),
+    el("div",{style:{display:"flex",gap:8,marginBottom:12}},
+      el("button",{onClick:function(){setTxs(txs.map(function(t){return Object.assign({},t,{checked:true});}));},style:{flex:1,padding:"7px",borderRadius:9,border:"1px solid var(--border)",background:"var(--surface-2)",fontSize:12.5,fontWeight:600,cursor:"pointer",color:"var(--text-2)"}},"Tout cocher"),
+      el("button",{onClick:function(){setStep(1);},style:{flex:1,padding:"7px",borderRadius:9,border:"1px solid var(--border)",background:"var(--surface-2)",fontSize:12.5,fontWeight:600,cursor:"pointer",color:"var(--text-2)"}},"← Modifier")),
+    el("div",{style:{maxHeight:"42vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:16}},
+      txs.map(function(t){
+        return el("div",{key:t.id,style:{background:t.checked?"var(--surface)":"var(--surface-2)",borderRadius:12,padding:"10px 12px",border:"1px solid "+(t.checked?"var(--border)":"var(--border-2)"),opacity:t.checked?1:0.5}},
+          el("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:t.checked?8:0}},
+            el("input",{type:"checkbox",checked:t.checked,onChange:function(){toggle(t.id);},style:{width:18,height:18,cursor:"pointer",flexShrink:0}}),
+            el("span",{style:{flex:1,fontSize:14,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},t.label),
+            el("span",{style:{fontSize:14,fontWeight:800,color:"var(--text)",whiteSpace:"nowrap"}},fmt(t.amount))),
+          t.checked&&el("div",{style:{display:"flex",gap:6,paddingLeft:28}},
+            cats.map(function(c){
+              var on=t.kind===c[0];
+              return el("button",{key:c[0],onClick:function(){setKind(t.id,c[0]);},
+                style:{flex:1,padding:"5px 2px",borderRadius:8,border:on?"1.5px solid "+c[2]:"1.5px solid var(--border-2)",background:on?c[2]+"18":"transparent",color:on?c[2]:"var(--text-3)",fontWeight:on?700:500,fontSize:11.5,cursor:"pointer"}},c[1]);
+            })));
+      })),
+    selected.length>0
+      ? el("button",{style:S.saveBtn,onClick:doImport},"Importer "+selected.length+" dépense"+(selected.length>1?"s":"")+" · "+fmt(total))
+      : el("button",{style:Object.assign({},S.saveBtn,{background:"var(--surface-3)",color:"var(--text-3)",boxShadow:"none"}),disabled:true},"Sélectionne au moins une transaction"));
 }
 
 // ---- Saisie rapide (depuis iOS Raccourcis) ----
