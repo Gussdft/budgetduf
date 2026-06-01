@@ -536,7 +536,7 @@ function App(){
     el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:14}},
 
     // ---- TAB ACCUEIL ----
-    tab==="accueil" && el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,setTab:setTab}),
+    tab==="accueil" && el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab}),
 
     // ---- TAB BUDGET ----
     tab==="budget" && el(React.Fragment,null,
@@ -1892,6 +1892,7 @@ function DashboardScreen(props){
   var reste=props.reste, pots=props.pots, projects=props.projects;
   var months=props.months, year=props.year, month=props.month;
   var potBalance=props.potBalance, setTab=props.setTab;
+  var projectBalance=props.projectBalance||function(p){return potBalance(p.id);};
 
   var monthName = MONTHS_FR[month]+" "+year;
   var totalDep = totalFixed+totalVariable+totalExcep;
@@ -1927,8 +1928,8 @@ function DashboardScreen(props){
   var topProjects = [];
   if(projects&&projects.length){
     topProjects = projects.slice().sort(function(a,b){
-      var pa=a.goal>0?potBalance(a.id)/(a.goal):0;
-      var pb=b.goal>0?potBalance(b.id)/(b.goal):0;
+      var pa=a.goal>0?projectBalance(a)/(a.goal):0;
+      var pb=b.goal>0?projectBalance(b)/(b.goal):0;
       return pb-pa;
     }).slice(0,3);
   }
@@ -2030,12 +2031,13 @@ function DashboardScreen(props){
     (projects&&projects.length>0) ? el("div",{style:cardStyle},
       el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}},
         el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)"}},"Projets en cours"),
-        el("button",{style:{border:"none",background:"transparent",color:"#945ECF",fontSize:12,fontWeight:600,cursor:"pointer"},onClick:function(){setTab("projets");}},
+        el("button",{style:{border:"none",background:"transparent",color:"#945ECF",fontSize:12,fontWeight:600,cursor:"pointer"},onClick:function(){setTab("epargne");}},
           "Voir tout →")),
       el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
         topProjects.map(function(proj){
-          var bal=proj.goal>0?Math.min(proj.goal,potBalance(proj.id)):potBalance(proj.id);
-          var pct=proj.goal>0?Math.min(100,Math.round(bal/proj.goal*100)):0;
+          var realBal=projectBalance(proj);
+          var bal=proj.goal>0?Math.min(proj.goal,realBal):realBal;
+          var pct=proj.goal>0?Math.min(100,Math.round(realBal/proj.goal*100)):0;
           return el("div",{key:proj.id},
             el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
               el("span",{style:{fontWeight:600,color:"var(--text)"}},(proj.label||"Projet")),
