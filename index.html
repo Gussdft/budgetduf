@@ -22,6 +22,11 @@
       --field-bg:#fbfcfe; --track:#e2e6ee;
       --tabbar-bg:rgba(255,255,255,.78); --tabbar-border:rgba(0,0,0,.07);
       --overlay:rgba(20,24,38,.45); --del:#c0c6d0;
+      --glass-bg:rgba(255,255,255,0.72);
+      --glass-bg-strong:rgba(255,255,255,0.88);
+      --glass-border:rgba(255,255,255,0.6);
+      --glass-shadow:0 8px 32px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.8) inset;
+      --bg-gradient:linear-gradient(160deg, #e8f4fd 0%, #f0f8f0 40%, #f5f0fb 100%);
     }
     /* ----- Thème sombre (palette iOS) ----- */
     html[data-theme="dark"]{
@@ -33,6 +38,10 @@
       --field-bg:#2c2c2e; --track:#3a3a3c;
       --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
       --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
+      --glass-bg:rgba(28,28,30,0.72); --glass-bg-strong:rgba(44,44,46,0.88);
+      --glass-border:rgba(255,255,255,0.10);
+      --glass-shadow:0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
+      --bg-gradient:linear-gradient(160deg,#0a0a14 0%,#0a120a 40%,#100a14 100%);
     }
     /* ----- Mode auto : suit le réglage système ----- */
     @media (prefers-color-scheme: dark){
@@ -45,6 +54,10 @@
         --field-bg:#2c2c2e; --track:#3a3a3c;
         --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
         --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
+        --glass-bg:rgba(28,28,30,0.72); --glass-bg-strong:rgba(44,44,46,0.88);
+        --glass-border:rgba(255,255,255,0.10);
+        --glass-shadow:0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
+        --bg-gradient:linear-gradient(160deg,#0a0a14 0%,#0a120a 40%,#100a14 100%);
       }
     }
     *{box-sizing:border-box;}
