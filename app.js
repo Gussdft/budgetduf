@@ -389,7 +389,7 @@ function App(){
 
   const changeMonth=(d)=>{let m=month+d,y=year;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMonth(m);setYear(y);};
   const setAmount=(k,id,a)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,amount:a}:x)}));
-  const setPrevuAmount=(id,a)=>setMonthData(function(c){var prev=Object.assign({},c.prevus||{});prev[id]=a;return Object.assign({},c,{prevus:prev});});
+  const setReelAmount=(id,a)=>setMonthData(function(c){var r=Object.assign({},c.reel||{});r[id]=a;return Object.assign({},c,{reel:r});});
   const addLine=(k,l)=>setMonthData(c=>({...c,[k]:[...c[k],{id:uid(),label:l,amount:0}]}));
   const delLine=(k,id)=>setMonthData(c=>({...c,[k]:c[k].filter(x=>x.id!==id)}));
   const renameLine=(k,id,l)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,label:l}:x)}));
@@ -457,8 +457,8 @@ function App(){
         el("button",{style:S.resetBtn,onClick:resetMonth},"Réinitialiser")),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
-        prevus:data.prevus||{},showPrevus:showPrevus&&kind!=="revenus",
-        onAmount:(id,v)=>setAmount(kind,id,v),onPrevu:(id,v)=>setPrevuAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
+        reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
+        onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
 
     // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(React.Fragment,null,
@@ -626,7 +626,7 @@ function SettingsScreen(props){
         el("div",{style:lastRowStyle},
           el("div",null,
             el("div",{style:labelStyle},"Budget prévu vs réel"),
-            el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Affiche les montants prévus sur chaque ligne")),
+            el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Saisis le montant réel dépensé à côté du prévu sur chaque ligne")),
           el(Switch,{on:showPrevus,color:"#1D8BCE",onToggle:function(){setShowPrevus(!showPrevus);}})))),
 
     // Section Foyer
@@ -1062,23 +1062,23 @@ function flowRow(icon,color,label,val,valColor){
     el("span",{style:{...S.flowVal,color:valColor}},val));
 }
 
-function FastBlock({kind,cfg,items,prevus,showPrevus,onAmount,onPrevu,onDel,onRename,onAdd}){
+function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd}){
   const total=items.reduce((s,x)=>s+(x.amount||0),0);
-  const totalPrevu=showPrevus?items.reduce(function(s,x){return s+(parseFloat((prevus||{})[x.id])||0);},0):0;
+  const totalReel=showPrevus?items.reduce(function(s,x){return s+(parseFloat((reel||{})[x.id])||0);},0):0;
   const [newLabel,setNewLabel]=useState("");
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
-  var diffTotal=total-totalPrevu;
+  var diffTotal=totalReel-total;
   return el("div",{style:S.section},
     el("div",{style:S.sectionHead},
       el("span",{style:S.sectionTitle},el("span",{style:{color:cfg.accent,display:"flex"}},el(Icon,{name:cfg.icon,size:16,color:cfg.accent}))," "+cfg.title),
       el("span",{style:{...S.badge,background:cfg.accent+"1a",color:cfg.accent}},cfg.sign+" "+fmt(total))),
-    showPrevus && totalPrevu>0 && el("div",{style:{display:"flex",justifyContent:"flex-end",gap:10,fontSize:12,color:"var(--text-3)",marginBottom:4}},
-      el("span",null,"Réel"),
+    showPrevus && el("div",{style:{display:"flex",justifyContent:"flex-end",gap:10,fontSize:12,color:"var(--text-3)",marginBottom:4}},
       el("span",null,"Prévu"),
+      el("span",null,"Réel"),
       el("span",{style:{minWidth:60,textAlign:"right"}},"Écart")),
     el("div",{style:S.lineList}, items.map(function(it){
-      var prevu=showPrevus?parseFloat((prevus||{})[it.id])||0:0;
-      var diff=it.amount-prevu;
+      var reelV=showPrevus?parseFloat((reel||{})[it.id])||0:0;
+      var diff=reelV-it.amount;
       var diffColor=diff>0?"#C8516C":(diff<0?"#19A979":"var(--text-3)");
       return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
         el("div",{style:S.lineRow},
@@ -1090,21 +1090,21 @@ function FastBlock({kind,cfg,items,prevus,showPrevus,onAmount,onPrevu,onDel,onRe
                 onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
               el("span",{style:S.eur},"€")),
             el("div",{style:{...S.lineAmtWrap,width:80,borderColor:"var(--border-2)"}},
-              el("input",{type:"number",inputMode:"decimal",style:{...S.lineAmtInput,fontSize:12,color:"var(--text-3)"},value:prevu||"",placeholder:"prévu",
-                onChange:function(e){onPrevu(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
+              el("input",{type:"number",inputMode:"decimal",style:{...S.lineAmtInput,fontSize:12,color:"var(--text-3)"},value:reelV||"",placeholder:"réel",
+                onChange:function(e){onReel(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
               el("span",{style:{...S.eur,fontSize:11}},"€")),
-            prevu>0 && el("span",{style:{fontSize:11,fontWeight:700,color:diffColor,minWidth:50,textAlign:"right"}},(diff>0?"+":"")+fmt(diff))),
+            reelV>0 && el("span",{style:{fontSize:11,fontWeight:700,color:diffColor,minWidth:50,textAlign:"right"}},(diff>0?"+":"")+fmt(diff))),
           !showPrevus && el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
             el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
               onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
             el("span",{style:S.eur},"€")),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))));
     })),
-    showPrevus && totalPrevu>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
+    showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
       el("span",{style:{color:"var(--text-3)"}},"Totaux"),
       el("div",{style:{display:"flex",gap:10}},
         el("span",{style:{color:cfg.accent}},fmt(total)),
-        el("span",{style:{color:"var(--text-3)"}},"/ "+fmt(totalPrevu)),
+        el("span",{style:{color:"var(--text-3)"}},"/ "+fmt(totalReel)),
         el("span",{style:{color:diffTotal>0?"#C8516C":(diffTotal<0?"#19A979":"var(--text-3)")}},(diffTotal>0?"+":"")+fmt(diffTotal)))),
     el("div",{style:S.addLineRow},
       el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
