@@ -42,6 +42,7 @@ const PATHS = {
   "file-text":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
   "scale":'<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
   "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  "home": '<path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -285,7 +286,7 @@ function App(){
   const [projects,setProjects] = useState([]);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
-  const [tab,setTab]           = useState("budget");
+  const [tab,setTab]           = useState("accueil");
   const [theme,setTheme]       = useState(loadTheme());
   const [showPrevus,setShowPrevus] = useState(function(){ var s=loadSettings(); return s.showPrevus===true; });
   const [annualReturn,setAnnualReturn] = useState(3);
@@ -445,6 +446,9 @@ function App(){
     // ---- panneau d'onglet (clé = tab pour rejouer l'animation) ----
     el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:14}},
 
+    // ---- TAB ACCUEIL ----
+    tab==="accueil" && el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,setTab:setTab}),
+
     // ---- TAB BUDGET ----
     tab==="budget" && el(React.Fragment,null,
       el("div",{style:S.flowCard},
@@ -570,7 +574,7 @@ function App(){
 
     // ---- barre d'onglets en bas (style iOS) ----
     el("nav",{style:S.tabBar},
-      [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
+      [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
           el("span",{style:{display:"flex",transform:on?"translateY(-1px) scale(1.06)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
@@ -1862,6 +1866,169 @@ function OutilsScreen(){
             el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginTop:2}},c.sub)),
           el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"}));
       })));
+}
+
+// ----------------------------------------------------------------------------
+// ---- Tableau de bord ----
+function DashboardScreen(props){
+  var totalRevenus=props.totalRevenus, totalFixed=props.totalFixed, totalVariable=props.totalVariable;
+  var totalExcep=props.totalExcep, totalSaved=props.totalSaved, nonAffecte=props.nonAffecte;
+  var reste=props.reste, pots=props.pots, projects=props.projects;
+  var months=props.months, year=props.year, month=props.month;
+  var potBalance=props.potBalance, setTab=props.setTab;
+
+  var monthName = MONTHS_FR[month]+" "+year;
+  var totalDep = totalFixed+totalVariable+totalExcep;
+  var nonAffecteColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
+  var savingsPct = totalRevenus>0?Math.min(100,Math.round(totalSaved/totalRevenus*100)):0;
+
+  // Patrimoine
+  var patrimoine = loadPatrimoine();
+  var nowY = new Date().getFullYear();
+  function actifVal(a){
+    var v=a.valeur||0;
+    if(a.type==="voiture"&&a.decote>0&&a.annee){
+      var yrs=Math.max(0,nowY-a.annee);
+      v=v*Math.pow(1-(a.decote||0)/100,yrs);
+    }
+    return v;
+  }
+  var totalActifs = 0, totalPassifs = 0;
+  if(patrimoine&&patrimoine.actifs) totalActifs=patrimoine.actifs.reduce(function(s,a){return s+actifVal(a);},0);
+  if(patrimoine&&patrimoine.passifs) totalPassifs=patrimoine.passifs.reduce(function(s,p){return s+(p.montant||0);},0);
+  var patrimoineNet = totalActifs-totalPassifs;
+  var hasPatrimoine = patrimoine&&((patrimoine.actifs&&patrimoine.actifs.length>0)||(patrimoine.passifs&&patrimoine.passifs.length>0));
+
+  // Echeances
+  var echeancesData = loadEcheances();
+  var today = new Date(); today.setHours(0,0,0,0);
+  var prochaines = [];
+  if(echeancesData&&echeancesData.length){
+    prochaines = echeancesData.filter(function(e){return !e.paid&&e.date;}).sort(function(a,b){return a.date.localeCompare(b.date);}).slice(0,3);
+  }
+
+  // Projects top 3 (les plus proches de l'objectif)
+  var topProjects = [];
+  if(projects&&projects.length){
+    topProjects = projects.slice().sort(function(a,b){
+      var pa=a.goal>0?potBalance(a.id)/(a.goal):0;
+      var pb=b.goal>0?potBalance(b.id)/(b.goal):0;
+      return pb-pa;
+    }).slice(0,3);
+  }
+
+  function dayDiff(dateStr){
+    var d=new Date(dateStr); d.setHours(0,0,0,0);
+    return Math.round((d-today)/86400000);
+  }
+
+  var cardStyle={background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"};
+  var bigNumStyle={fontSize:32,fontWeight:800,letterSpacing:"-1px"};
+  var subStyle={fontSize:12,color:"var(--text-3)",marginTop:4};
+  var colStyle={flex:1,textAlign:"center"};
+  var colValStyle={fontSize:13,fontWeight:700,color:"var(--text-2)"};
+  var colLblStyle={fontSize:10.5,color:"var(--text-3)",marginTop:2};
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+
+    // --- Carte Mois en cours ---
+    el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}},monthName),
+      el("div",{style:Object.assign({},bigNumStyle,{color:nonAffecteColor})},fmt(nonAffecte)),
+      el("div",{style:subStyle},"Non affecté ce mois"),
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
+      el("div",{style:{display:"flex",gap:8}},
+        el("div",{style:colStyle},
+          el("div",{style:colValStyle},"+"+fmt(totalRevenus)),
+          el("div",{style:colLblStyle},"Revenus")),
+        el("div",{style:{width:1,background:"var(--border-2)"}}),
+        el("div",{style:colStyle},
+          el("div",{style:Object.assign({},colValStyle,{color:"#E8743B"})},"-"+fmt(totalDep)),
+          el("div",{style:colLblStyle},"Dépenses")),
+        el("div",{style:{width:1,background:"var(--border-2)"}}),
+        el("div",{style:colStyle},
+          el("div",{style:Object.assign({},colValStyle,{color:"#1D8BCE"})},"-"+fmt(totalSaved)),
+          el("div",{style:colLblStyle},"Épargné")))),
+
+    // --- Carte Épargne du mois ---
+    el("div",{style:cardStyle},
+      el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)"}},"Épargne du mois"),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",background:"#1D8BCE14",borderRadius:8,padding:"3px 9px",fontWeight:600}},savingsPct+"%")),
+      el("div",{style:Object.assign({},bigNumStyle,{color:"#1D8BCE",fontSize:28})},fmt(totalSaved)),
+      el("div",{style:{height:7,background:"var(--border-2)",borderRadius:5,overflow:"hidden",marginTop:12}},
+        el("div",{style:{height:"100%",width:savingsPct+"%",background:"linear-gradient(90deg,#1D8BCE,#19A979)",borderRadius:5,transition:"width .4s ease"}})),
+      nonAffecte>0 ? el("div",{style:{marginTop:12,display:"flex",alignItems:"center",gap:8}},
+        el("div",{style:{fontSize:12,color:"var(--text-3)"}},fmt(nonAffecte)+" non répartis"),
+        el("button",{style:{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,border:"none",borderRadius:10,padding:"7px 13px",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"},onClick:function(){setTab("budget");}},
+          "Répartir "+fmt(nonAffecte))) : null),
+
+    // --- Carte Patrimoine net ---
+    el("div",{style:cardStyle},
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Patrimoine net"),
+      hasPatrimoine ? el("div",null,
+        el("div",{style:Object.assign({},bigNumStyle,{color:patrimoineNet>=0?"#19A979":"#C8516C"})},fmt(patrimoineNet)),
+        el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          el("div",null,
+            el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}},
+              el("span",{style:{color:"#19A979",fontWeight:600}},"Actifs"),
+              el("span",{style:{color:"var(--text-3)"}},fmt(totalActifs))),
+            el("div",{style:{height:7,background:"var(--border-2)",borderRadius:5,overflow:"hidden"}},
+              el("div",{style:{height:"100%",width:(totalActifs+totalPassifs>0?Math.round(totalActifs/(totalActifs+totalPassifs)*100):0)+"%",background:"#19A979",borderRadius:5}}))),
+          el("div",null,
+            el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}},
+              el("span",{style:{color:"#C8516C",fontWeight:600}},"Passifs"),
+              el("span",{style:{color:"var(--text-3)"}},fmt(totalPassifs))),
+            el("div",{style:{height:7,background:"var(--border-2)",borderRadius:5,overflow:"hidden"}},
+              el("div",{style:{height:"100%",width:(totalActifs+totalPassifs>0?Math.round(totalPassifs/(totalActifs+totalPassifs)*100):0)+"%",background:"#C8516C",borderRadius:5}}))))) :
+      el("div",null,
+        el("div",{style:{fontSize:13,color:"var(--text-3)",marginBottom:12}},"Renseigne ton bilan dans Outils → Bilan patrimonial"),
+        el("button",{style:{display:"flex",alignItems:"center",gap:5,border:"none",borderRadius:10,padding:"8px 14px",background:"var(--surface-2)",color:"#1D8BCE",fontSize:13,fontWeight:600,cursor:"pointer"},onClick:function(){setTab("outils");}},
+          el(Icon,{name:"scale",size:14,color:"#1D8BCE"}),"Accéder au bilan"))),
+
+    // --- Carte Échéances ---
+    el("div",{style:cardStyle},
+      el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)"}},"Prochaines échéances"),
+        prochaines.length>0 ? el("button",{style:{border:"none",background:"transparent",color:"#1D8BCE",fontSize:12,fontWeight:600,cursor:"pointer"},onClick:function(){setTab("outils");}},
+          "Voir tout →") : null),
+      prochaines.length===0 ? el("div",{style:{fontSize:13,color:"var(--text-3)"}},"✔ Aucune échéance prévue") :
+      el("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+        prochaines.map(function(e){
+          var diff=dayDiff(e.date);
+          var badgeColor=diff<0?"#C8516C":diff===0?"#E8743B":"#1D8BCE";
+          var badgeTxt=diff<0?"En retard":diff===0?"Aujourd'hui":"dans "+diff+" j";
+          var dateObj=new Date(e.date);
+          var dateTxt=dateObj.getDate()+"/"+(dateObj.getMonth()+1)+"/"+dateObj.getFullYear();
+          return el("div",{key:e.id,style:{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid var(--border-2)"}},
+            el("div",{style:{flex:1,minWidth:0}},
+              el("div",{style:{fontSize:14,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},e.label),
+              el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:2}},dateTxt)),
+            el("div",{style:{textAlign:"right"}},
+              el("div",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},fmt(e.montant)),
+              el("div",{style:{fontSize:10.5,fontWeight:700,color:badgeColor,background:badgeColor+"18",borderRadius:6,padding:"2px 7px",marginTop:3,display:"inline-block"}},badgeTxt)));
+        }))),
+
+    // --- Carte Projets en cours ---
+    (projects&&projects.length>0) ? el("div",{style:cardStyle},
+      el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)"}},"Projets en cours"),
+        el("button",{style:{border:"none",background:"transparent",color:"#945ECF",fontSize:12,fontWeight:600,cursor:"pointer"},onClick:function(){setTab("projets");}},
+          "Voir tout →")),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+        topProjects.map(function(proj){
+          var bal=proj.goal>0?Math.min(proj.goal,potBalance(proj.id)):potBalance(proj.id);
+          var pct=proj.goal>0?Math.min(100,Math.round(bal/proj.goal*100)):0;
+          return el("div",{key:proj.id},
+            el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+              el("span",{style:{fontWeight:600,color:"var(--text)"}},(proj.label||"Projet")),
+              el("span",{style:{color:"var(--text-3)"}},fmt(bal)+(proj.goal>0?" / "+fmt(proj.goal):""))),
+            el("div",{style:{height:7,background:"var(--border-2)",borderRadius:5,overflow:"hidden"}},
+              el("div",{style:{height:"100%",width:pct+"%",background:"#945ECF",borderRadius:5,transition:"width .4s ease"}})),
+            el("div",{style:{fontSize:11,color:"#945ECF",fontWeight:600,marginTop:3}},pct+"%"));
+        }))) : null
+  );
 }
 
 // ----------------------------------------------------------------------------
