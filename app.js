@@ -36,6 +36,8 @@ const PATHS = {
   "calculator":'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="8" x2="8" y1="14" y2="14"/><line x1="12" x2="12" y1="14" y2="14"/><line x1="16" x2="16" y1="14" y2="14"/><line x1="8" x2="8" y1="18" y2="18"/><line x1="12" x2="12" y1="18" y2="18"/><line x1="16" x2="16" y1="18" y2="18"/>',
   "percent":'<line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   "car":'<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+  "trending-up":'<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  "git-compare":'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/>',
   "calendar":'<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
   "file-text":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
   "scale":'<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
@@ -1373,13 +1375,44 @@ function IRSimulator({onBack}){
   const [revenu,setRevenu]=useState("");
   const [situation,setSituation]=useState("couple");
   const [enfants,setEnfants]=useState(0);
+  const [showRC,setShowRC]=useState(false);
+  const [dons,setDons]=useState("");
+  const [domicile,setDomicile]=useState("");
+  const [gardeNb,setGardeNb]=useState(0);
+  const [gardeDep,setGardeDep]=useState("");
   var R=parseFloat(revenu)||0;
   var parts=irParts(situation,enfants);
+  var partsBase=situation==="couple"?2:1;
+  var demiPartsEnfants=(parts-partsBase)*2;
   var quotient=parts>0?R/parts:0;
-  var impot=Math.max(0,irTaxOnQuotient(quotient)*parts);
-  var tauxMoyen=R>0?(impot/R)*100:0;
+  var impotParts=Math.max(0,irTaxOnQuotient(quotient)*parts);
+  var impotBase=Math.max(0,irTaxOnQuotient(partsBase>0?R/partsBase:0)*partsBase);
+  var avantage=impotBase-impotParts;
+  var plafond=1791*demiPartsEnfants;
+  var plafonne=false;
+  var impotBrut=impotParts;
+  if(demiPartsEnfants>0 && avantage>plafond){ impotBrut=impotBase-plafond; plafonne=true; }
+  // Réductions
+  var donsV=parseFloat(dons)||0;
+  var donsBase=Math.min(donsV,R*0.2);
+  var redDons=donsBase*0.66;
+  var reductions=Math.min(redDons,impotBrut);
+  // Crédits
+  var domV=parseFloat(domicile)||0;
+  var credDomicile=Math.min(domV,12000)*0.5;
+  var gardeV=parseFloat(gardeDep)||0;
+  var gardeBase=Math.min(gardeV,3500*(gardeNb||0));
+  var credGarde=gardeBase*0.5;
+  var credits=credDomicile+credGarde;
+  var impotNet=impotBrut-reductions-credits;
+  var tauxMoyen=R>0?(impotBrut/R)*100:0;
   var tauxMarginal=irMarginalRate(quotient)*100;
-  var netMensuel=(R-impot)/12;
+  var netMensuel=(R-Math.max(0,impotNet))/12;
+  var recapRow=function(label,val,color){
+    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:14}},
+      el("span",{style:{color:"var(--text-2)"}},label),
+      el("span",{style:{fontWeight:700,color:color||"var(--text)"}},val));
+  };
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Impôt sur le revenu"),
@@ -1400,13 +1433,37 @@ function IRSimulator({onBack}){
         el("button",{onClick:function(){setEnfants(enfants+1);},style:S.navBtn},el(Icon,{name:"chevron-right",size:18})),
         el("span",{style:{fontSize:13,color:"var(--text-3)",marginLeft:8}},parts+" part"+(parts>1?"s":"")))),
     el("div",{style:S.section},
-      el("div",{style:S.fieldLabel},"Impôt total estimé"),
-      bigNumber(fmt(impot),"#C8516C"),
+      el("button",{onClick:function(){setShowRC(!showRC);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:"transparent",cursor:"pointer",padding:0}},
+        el("span",{style:Object.assign({},S.sectionTitle,{margin:0})},el(Icon,{name:"percent",size:16,color:"#945ECF"}),"Réductions & crédits d'impôt"),
+        el(Icon,{name:showRC?"chevron-down":"chevron-right",size:18,color:"var(--text-3)"})),
+      showRC?el("div",{style:{marginTop:12}},
+        el("label",{style:S.fieldLabel},"Dons aux associations (€) — réduction 66 %"),
+        el("input",{type:"number",inputMode:"decimal",style:S.input,value:dons,placeholder:"ex : 300",onChange:function(e){setDons(e.target.value);}}),
+        el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Emploi à domicile / garde à domicile (€) — crédit 50 %"),
+        el("input",{type:"number",inputMode:"decimal",style:S.input,value:domicile,placeholder:"plafond 12 000 €",onChange:function(e){setDomicile(e.target.value);}}),
+        el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Frais de garde hors domicile (< 6 ans)"),
+        el("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:10}},
+          el("span",{style:{fontSize:13,color:"var(--text-3)"}},"Enfants concernés"),
+          el("button",{onClick:function(){setGardeNb(Math.max(0,gardeNb-1));},style:S.navBtn},el(Icon,{name:"chevron-left",size:18})),
+          el("span",{style:{fontSize:17,fontWeight:700,minWidth:24,textAlign:"center"}},gardeNb),
+          el("button",{onClick:function(){setGardeNb(gardeNb+1);},style:S.navBtn},el(Icon,{name:"chevron-right",size:18}))),
+        el("input",{type:"number",inputMode:"decimal",style:S.input,value:gardeDep,placeholder:"dépense totale (crédit 50 %, plafond 3 500 €/enfant)",onChange:function(e){setGardeDep(e.target.value);}})):null),
+    el("div",{style:S.section},
+      el("div",{style:S.fieldLabel},"Impôt net final estimé"),
+      bigNumber(fmt(impotNet),impotNet<0?"#19A979":"#C8516C"),
+      impotNet<0?el("div",{style:{fontSize:12.5,color:"#19A979",fontWeight:600,marginTop:4}},"Remboursement attendu"):null,
+      plafonne?el("div",{style:{fontSize:12.5,color:"#E8743B",fontWeight:600,marginTop:8}},"Plafonnement du quotient familial appliqué (avantage limité à "+fmt(plafond)+")"):null,
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"14px 0"}}),
+      recapRow("Impôt brut",fmt(impotBrut)),
+      reductions>0?recapRow("− Réductions",fmt(-reductions),"#19A979"):null,
+      credits>0?recapRow("− Crédits d'impôt",fmt(-credits),"#19A979"):null,
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"8px 0"}}),
+      recapRow("Impôt net",fmt(impotNet),impotNet<0?"#19A979":"#C8516C"),
       el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux moyen"),el("div",{style:S.bilanVal},tauxMoyen.toFixed(1)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux marginal"),el("div",{style:S.bilanVal},tauxMarginal.toFixed(0)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net après impôt / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(netMensuel)))),
-      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative, hors réductions/crédits d'impôt et plafonnement du quotient familial.")));
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative. Le calcul réel peut différer (décote, autres réductions, etc.).")));
 }
 
 // ---- Simulateur 2 : Prêt ----
@@ -1642,6 +1699,139 @@ function EcheancierSimulator({onBack}){
 }
 
 // ---- Menu Outils ----
+// ---- Simulateur : PFU vs barème ----
+function PfuSimulator({onBack}){
+  const [montant,setMontant]=useState("");
+  const [type,setType]=useState("dividendes");
+  const [tmi,setTmi]=useState(30);
+  var M=parseFloat(montant)||0;
+  var t=tmi/100;
+  // PFU : 30 %
+  var pfuTotal=M*0.30;
+  var netPfu=M-pfuTotal;
+  // Barème : PS 17,2 % + IR selon type
+  var ps=M*0.172;
+  var irBareme=type==="dividendes"?(t*M*0.60):(t*M);
+  var netBareme=M-ps-irBareme;
+  var pfuGagne=netPfu>=netBareme;
+  var ecart=Math.abs(netPfu-netBareme);
+  var optBox=function(title,net,best,detail){
+    return el("div",{style:{flex:1,minWidth:140,background:best?"#19A97912":"var(--surface-2)",borderRadius:14,padding:14,border:best?"1.5px solid #19A979":"1.5px solid var(--border)"}},
+      el("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},
+        el("span",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)"}},title),
+        best?el("span",{style:{fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:12,background:"#19A979",color:"#fff"}},"MEILLEUR"):null),
+      el("div",{style:{fontSize:22,fontWeight:800,color:best?"#19A979":"var(--text)"}},fmt(net)),
+      el("div",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:4}},detail));
+  };
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Flat tax vs barème"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Montant brut (dividendes ou plus-value) (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:montant,placeholder:"ex : 10000",onChange:function(e){setMontant(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Type de revenu"),
+      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+        [["dividendes","Dividendes"],["pv","Plus-value mobilière"]].map(function(o){
+          var on=type===o[0];
+          return el("button",{key:o[0],onClick:function(){setType(o[0]);},
+            style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13.5,cursor:"pointer"}},o[1]);
+        })),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Taux marginal d'imposition (TMI)"),
+      el("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+        [0,11,30,41,45].map(function(v){
+          var on=tmi===v;
+          return el("button",{key:v,onClick:function(){setTmi(v);},
+            style:{flex:1,minWidth:46,padding:"9px 0",borderRadius:9,border:on?"1.5px solid #1D8BCE":"1.5px solid var(--border)",background:on?"#1D8BCE15":"var(--field-bg)",color:on?"#1D8BCE":"var(--text-2)",fontWeight:on?800:600,fontSize:14,cursor:"pointer"}},v+" %");
+        }))),
+    el("div",{style:S.section},
+      el("div",{style:{display:"flex",gap:12,flexWrap:"wrap"}},
+        optBox("PFU (flat tax 30 %)",netPfu,pfuGagne,"Imposition "+fmt(pfuTotal)),
+        optBox("Barème progressif",netBareme,!pfuGagne,"PS "+fmt(ps)+" + IR "+fmt(irBareme))),
+      M>0?el("div",{style:{marginTop:14,padding:"10px 14px",borderRadius:12,background:"#19A97912",fontSize:13.5,fontWeight:700,color:"#19A979"}},
+        (pfuGagne?"La flat tax (PFU)":"Le barème progressif")+" est plus avantageux de "+fmt(ecart)):null,
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Dividendes : abattement de 40 % sur la part soumise à l'IR au barème. La CSG déductible (6,8 %) est ignorée pour simplifier. Le barème est souvent avantageux si TMI ≤ 11 %.")));
+}
+
+// ---- Simulateur : Achat vs Location (voiture) ----
+function AchatLocSimulator({onBack}){
+  const [unit,setUnit]=useState("ans");
+  const [duree,setDuree]=useState("4");
+  const [prix,setPrix]=useState("");
+  const [apportA,setApportA]=useState("");
+  const [decote,setDecote]=useState("15");
+  const [entretien,setEntretien]=useState("");
+  const [apportL,setApportL]=useState("");
+  const [loyer,setLoyer]=useState("");
+  const [entInclus,setEntInclus]=useState(false);
+  var mois=unit==="ans"?(parseFloat(duree)||0)*12:(parseFloat(duree)||0);
+  mois=Math.round(mois);
+  var annees=mois/12;
+  var ent=parseFloat(entretien)||0;
+  // Achat
+  var prixV=parseFloat(prix)||0;
+  var dec=parseFloat(decote)||0;
+  var revente=prixV*Math.pow(1-dec/100,annees);
+  var coutAchat=prixV-revente+ent*annees;
+  // Location
+  var apL=parseFloat(apportL)||0;
+  var loy=parseFloat(loyer)||0;
+  var coutLoc=apL+loy*mois+(entInclus?0:ent*annees);
+  var achatGagne=coutAchat<=coutLoc;
+  var ecart=Math.abs(coutAchat-coutLoc);
+  var mensAchat=mois>0?coutAchat/mois:0;
+  var mensLoc=mois>0?coutLoc/mois:0;
+  var optBox=function(title,total,mensuel,best,detail){
+    return el("div",{style:{flex:1,minWidth:150,background:best?"#19A97912":"var(--surface-2)",borderRadius:14,padding:14,border:best?"1.5px solid #19A979":"1.5px solid var(--border)"}},
+      el("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},
+        el("span",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)"}},title),
+        best?el("span",{style:{fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:12,background:"#19A979",color:"#fff"}},"MOINS CHER"):null),
+      el("div",{style:{fontSize:22,fontWeight:800,color:best?"#19A979":"var(--text)"}},fmt(total)),
+      el("div",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:4}},fmt(mensuel)+" / mois"),
+      el("div",{style:{fontSize:11,color:"var(--text-4)",marginTop:3}},detail));
+  };
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Durée de détention / usage"),
+      el("div",{style:{display:"flex",gap:8}},
+        el("input",{type:"number",inputMode:"decimal",style:Object.assign({},S.input,{flex:1}),value:duree,onChange:function(e){setDuree(e.target.value);}}),
+        el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2}},
+          [["ans","ans"],["mois","mois"]].map(function(o){
+            var on=unit===o[0];
+            return el("button",{key:o[0],onClick:function(){setUnit(o[0]);},
+              style:{padding:"9px 14px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:13.5,cursor:"pointer"}},o[1]);
+          })))),
+    el("div",{style:S.section},
+      el("div",{style:Object.assign({},S.sectionTitle,{marginBottom:12})},el(Icon,{name:"car",size:16,color:"#1D8BCE"}),"Achat"),
+      el("label",{style:S.fieldLabel},"Prix d'achat (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:prix,placeholder:"ex : 25000",onChange:function(e){setPrix(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Apport / comptant (€) — indicatif"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:apportA,placeholder:"0",onChange:function(e){setApportA(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Décote annuelle estimée (%)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:decote,onChange:function(e){setDecote(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Entretien annuel (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:entretien,placeholder:"ex : 800",onChange:function(e){setEntretien(e.target.value);}}),
+      prixV>0?el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginTop:10}},"Valeur de revente estimée : "+fmt(revente)):null),
+    el("div",{style:S.section},
+      el("div",{style:Object.assign({},S.sectionTitle,{marginBottom:12})},el(Icon,{name:"git-compare",size:16,color:"#945ECF"}),"Location (LLD / LOA)"),
+      el("label",{style:S.fieldLabel},"Apport / premier loyer (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:apportL,placeholder:"0",onChange:function(e){setApportL(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Loyer mensuel (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:loyer,placeholder:"ex : 350",onChange:function(e){setLoyer(e.target.value);}}),
+      el("button",{onClick:function(){setEntInclus(!entInclus);},style:{display:"flex",alignItems:"center",gap:9,marginTop:14,border:"none",background:"transparent",cursor:"pointer",padding:0}},
+        el("div",{style:{width:42,height:24,borderRadius:13,background:entInclus?"#19A979":"var(--border)",display:"flex",alignItems:"center",padding:2,transition:"background .2s"}},
+          el("div",{style:{width:20,height:20,borderRadius:"50%",background:"#fff",marginLeft:entInclus?18:0,transition:"margin .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}})),
+        el("span",{style:{fontSize:13.5,fontWeight:600,color:"var(--text-2)"}},"Entretien inclus dans le loyer"))),
+    el("div",{style:S.section},
+      el("div",{style:{display:"flex",gap:12,flexWrap:"wrap"}},
+        optBox("Achat",coutAchat,mensAchat,achatGagne,"prix − revente + entretien"),
+        optBox("Location",coutLoc,mensLoc,!achatGagne,entInclus?"apport + loyers":"apport + loyers + entretien")),
+      (coutAchat>0||coutLoc>0)?el("div",{style:{marginTop:14,padding:"10px 14px",borderRadius:12,background:"#19A97912",fontSize:13.5,fontWeight:700,color:"#19A979"}},
+        (achatGagne?"L'achat":"La location")+" coûte "+fmt(ecart)+" de moins sur la période"):null,
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"L'achat immobilise du capital ; la location préserve la trésorerie. Coût net = dépenses réelles − valeur résiduelle conservée.")));
+}
+
 function OutilsScreen(){
   const [view,setView]=useState("menu");
   var back=function(){setView("menu");};
@@ -1649,9 +1839,13 @@ function OutilsScreen(){
   if(view==="pret") return el(LoanSimulator,{onBack:back});
   if(view==="bilan") return el(BilanSimulator,{onBack:back});
   if(view==="echeancier") return el(EcheancierSimulator,{onBack:back});
+  if(view==="pfu") return el(PfuSimulator,{onBack:back});
+  if(view==="achatloc") return el(AchatLocSimulator,{onBack:back});
   var cards=[
     {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton impôt 2025 (revenus 2024)"},
     {id:"pret",icon:"car",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût, capacité d'emprunt"},
+    {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Dividendes & plus-values"},
+    {id:"achatloc",icon:"git-compare",color:"#F2B53C",title:"Achat vs Location",sub:"Voiture : LLD/LOA ou achat"},
     {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Actifs − passifs = patrimoine net"},
     {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Suivi des échéances de l'année"},
   ];
