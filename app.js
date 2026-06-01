@@ -1846,6 +1846,32 @@ function bigNumber(value,color){
   return el("div",{style:{fontSize:30,fontWeight:800,letterSpacing:"-0.5px",color:color||"var(--text)"}},value);
 }
 
+// ---- Composant réutilisable : GaugeBar ----
+function GaugeBar(props){
+  var value=props.value||0;
+  var zones=props.zones||[];
+  var unit=props.unit||"%";
+  var maxVal=zones.length>0?zones[zones.length-1].max:100;
+  var clampedPct=Math.min(100,Math.max(0,(value/maxVal)*100));
+  var currentZone=zones[zones.length-1];
+  for(var zi=0;zi<zones.length;zi++){
+    if(value<=zones[zi].max){ currentZone=zones[zi]; break; }
+  }
+  var barH=10;
+  return el("div",{style:{marginTop:8}},
+    el("div",{style:{position:"relative",height:barH,borderRadius:barH,overflow:"hidden",display:"flex"}},
+      zones.map(function(z,i){
+        var prev=i===0?0:zones[i-1].max;
+        var segPct=((z.max-prev)/maxVal)*100;
+        return el("div",{key:i,style:{width:segPct+"%",height:"100%",background:z.color,opacity:0.32}});
+      }),
+      el("div",{style:{position:"absolute",top:0,left:0,height:"100%",width:clampedPct+"%",background:currentZone.color,borderRadius:barH,transition:"width 0.4s"}})),
+    el("div",{style:{position:"relative",marginTop:4,height:14}},
+      el("div",{style:{position:"absolute",left:clampedPct+"%",transform:"translateX(-50%)",fontSize:11,fontWeight:700,color:currentZone.color,whiteSpace:"nowrap"}},value.toFixed(1)+unit)),
+    el("div",{style:{marginTop:14,display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:20,background:currentZone.color+"18",border:"1px solid "+currentZone.color+"44"}},
+      el("span",{style:{fontSize:11,fontWeight:700,color:currentZone.color}},currentZone.label)));
+}
+
 // ---- Simulateur 1 : Impôt sur le revenu ----
 function IRSimulator({onBack}){
   const [revenu,setRevenu]=useState("");
@@ -1940,6 +1966,58 @@ function IRSimulator({onBack}){
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux moyen"),el("div",{style:S.bilanVal},tauxMoyen.toFixed(1)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Taux marginal"),el("div",{style:S.bilanVal},tauxMarginal.toFixed(0)+" %")),
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Net après impôt / mois"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(netMensuel)))),
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"16px 0"}}),
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"Décomposition par tranche"),
+      el("div",{style:{overflowX:"auto"}},
+        el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5}},
+          el("thead",null,el("tr",null,
+            ["Tranche","Taux","Imposable","Impôt"].map(function(h){
+              return el("th",{key:h,style:{textAlign:h==="Tranche"?"left":"right",padding:"5px 4px",color:"var(--text-3)",fontWeight:700,borderBottom:"1px solid var(--border-2)"}},h);
+            }))),
+          el("tbody",null,(function(){
+            var revImp=R>0?quotient:0;
+            var rows2=[];
+            var bracketLabels=["0 → 11 294 €","11 295 → 28 797 €","28 798 → 82 341 €","82 342 → 177 106 €","Au-delà de 177 106 €"];
+            var bracketBounds=[0,11294,28797,82341,177106,Infinity];
+            for(var bi=0;bi<IR_BRACKETS.length;bi++){
+              var bLow=bracketBounds[bi], bHigh=IR_BRACKETS[bi].upTo;
+              var bRate=IR_BRACKETS[bi].rate;
+              if(revImp<=bLow) break;
+              var imposable=(Math.min(revImp,bHigh)-bLow)*parts;
+              var impot=imposable*bRate;
+              var active=revImp>bLow;
+              rows2.push(el("tr",{key:bi,style:{borderTop:"1px solid var(--border-2)",background:active&&bRate>0?"var(--surface-2)":"transparent"}},
+                el("td",{style:{padding:"6px 4px",fontSize:12}},bracketLabels[bi]),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",fontWeight:700,color:bRate===0?"var(--text-3)":bRate>=0.41?"#C8516C":bRate>=0.30?"#E8743B":"#F2B53C"}},Math.round(bRate*100)+"%"),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-2)"}},bRate>0&&imposable>0?fmt(imposable):"—"),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",fontWeight:700,color:"var(--text)"}},bRate>0&&impot>0?fmt(impot):"—")));
+            }
+            return rows2;
+          })()))),
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"16px 0"}}),
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Jauge TMI"),
+      el(GaugeBar,{value:tauxMarginal,unit:"%",zones:[
+        {max:0,color:"#19A979",label:"Exonéré (0%)"},
+        {max:11,color:"#19A979",label:"Tranche 11 % — Zone confortable"},
+        {max:30,color:"#F2B53C",label:"Tranche 30 % — Zone intermédiaire"},
+        {max:41,color:"#E8743B",label:"Tranche 41 % — Zone élevée"},
+        {max:45,color:"#C8516C",label:"Tranche 45 % — Zone maximale"}
+      ]}),
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"16px 0"}}),
+      el("div",{style:{background:"#945ECF0f",border:"1px solid #945ECF28",borderRadius:14,padding:"14px 16px"}},
+        el("div",{style:{fontSize:13,fontWeight:800,color:"#945ECF",marginBottom:10}},"À retenir"),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
+            el("span",{style:{color:"var(--text-2)"}},"Ton TMI (taux sur le dernier euro)"),
+            el("span",{style:{fontWeight:700,color:tauxMarginal>=41?"#C8516C":tauxMarginal>=30?"#E8743B":"#19A979"}},tauxMarginal.toFixed(0)+" %")),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
+            el("span",{style:{color:"var(--text-2)"}},"Taux moyen réel (impôt / revenu)"),
+            el("span",{style:{fontWeight:700}},tauxMoyen.toFixed(2)+" %")),
+          el("div",{style:{marginTop:8,padding:"8px 12px",borderRadius:10,background:"var(--surface-2)",fontSize:12.5,color:"var(--text-2)",lineHeight:1.5}},
+            tauxMarginal>=41?"💡 À 41-45 %, chaque euro versé sur un PER génère 0,41-0,45 € d'économie d'impôt. C'est la tranche la plus favorable pour le PER.":
+            tauxMarginal>=30?"💡 À 30 %, le PER est particulièrement avantageux : 1 000 € versés ne coûtent que 700 € après remboursement fiscal.":
+            tauxMarginal>=11?"💡 À 11 %, l'avantage PER existe mais reste modéré. Priorisez d'abord le Livret A et un PEA.":
+            "💡 Pas d'impôt à ce niveau de revenus. Constituez d'abord votre épargne de précaution."))),
       el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Estimation indicative. Le calcul réel peut différer (décote, autres réductions, etc.).")));
 }
 
@@ -1987,6 +2065,13 @@ function LoanSimulator({onBack}){
   var chM=parseFloat(chargesCr)||0;
   var mensMax=Math.max(0,revM*0.35-chM);
   var capEmpr=loanCapacity(mensMax,tx,n);
+  var tauxEndet=revM>0?((M+chM)/revM)*100:0;
+  var endetZones=[
+    {max:25,color:"#19A979",label:"Excellent — zone très confortable"},
+    {max:33,color:"#F2B53C",label:"Acceptable — limite recommandée banques"},
+    {max:40,color:"#E8743B",label:"Élevé — banques demandent généralement < 35 %"},
+    {max:100,color:"#C8516C",label:"Très élevé — difficile à financer"}
+  ];
 
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
@@ -2007,14 +2092,22 @@ function LoanSimulator({onBack}){
               style:{padding:"9px 14px",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
           }))),
       el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Assurance (% annuel du capital, optionnel)"),
-      el("input",{type:"number",inputMode:"decimal",style:S.input,value:assurance,placeholder:"ex : 0.36",onChange:function(e){setAssurance(e.target.value);}})),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:assurance,placeholder:"ex : 0.36",onChange:function(e){setAssurance(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Revenus nets mensuels du foyer (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revMens,placeholder:"ex : 4500",onChange:function(e){setRevMens(e.target.value);}})),
     el("div",{style:S.section},
       el("div",{style:S.fieldLabel},"Mensualité (hors assurance)"),
       bigNumber(fmt(M),"#1D8BCE"),
       assMens>0&&el("div",{style:{fontSize:13,color:"var(--text-2)",marginTop:4}},"+ "+fmt(assMens)+" d'assurance = "+fmt(M+assMens)+" / mois"),
-      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
-        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Coût du crédit"),el("div",{style:Object.assign({},S.bilanVal,{color:"#E8743B"})},fmt(cout))),
-        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Total avec assurance"),el("div",{style:S.bilanVal},fmt(coutAssur)))),
+      el("div",{style:{background:"#E8743B0f",border:"1px solid #E8743B28",borderRadius:12,padding:"12px 14px",marginTop:14}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:4}},"Coût total du crédit"),
+        el("div",{style:{fontSize:22,fontWeight:800,color:"#E8743B"}},fmt(cout)),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:4}},"= Total remboursé "+fmt(totalPaid)+" − Capital "+fmt(P)),
+        assMens>0&&el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Avec assurance : "+fmt(coutAssur)+" d'intérêts et primes")),
+      revM>0&&M>0&&el("div",null,
+        el("div",{style:{height:1,background:"var(--border-2)",margin:"14px 0"}}),
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Taux d'endettement"),
+        el(GaugeBar,{value:tauxEndet,unit:"%",zones:endetZones})),
       rows.length>0&&el("button",{onClick:function(){setShowTable(!showTable);},style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14",marginTop:14})},showTable?"Masquer l'amortissement":"Voir l'amortissement"),
       showTable&&el("div",{style:{marginTop:12,overflowX:"auto"}},
         el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5}},
@@ -2029,9 +2122,7 @@ function LoanSimulator({onBack}){
           }))))),
     el("div",{style:S.section},
       el("div",{style:S.sectionTitle},el(Icon,{name:"scale",size:16,color:"#19A979"})," Capacité d'emprunt"),
-      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Revenus mensuels du foyer (€)"),
-      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revMens,placeholder:"ex : 4500",onChange:function(e){setRevMens(e.target.value);}}),
-      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Charges crédits existantes (€/mois)"),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Charges crédits existantes (€/mois)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesCr,placeholder:"0",onChange:function(e){setChargesCr(e.target.value);}}),
       el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
         el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Mensualité max (35 %)"),el("div",{style:S.bilanVal},fmt(mensMax))),
@@ -2611,7 +2702,59 @@ function ImmoSimulator({onBack}){
         optBox("Coût net location",coutLocNet,!achatGagne)),
       pointMort>0&&el("div",{style:{fontSize:13,color:"var(--text-3)",marginBottom:8}},
         "Point mort estimé : ",el("strong",{style:{color:"#19A979"}},pointMort+" ans")," (l'achat devient moins cher)"),
-      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:0}},"Hors inflation, hypothèses simplifiées. Coût net achat = mensualités + frais notaire + charges − valeur revente. Coût net location = loyers + charges − rendement sur l'apport placé.")));
+      pointMort>0&&el("div",{style:{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:pointMort<5?"#19A97918":pointMort<10?"#F2B53C18":pointMort<15?"#E8743B18":"#C8516C18",border:"1px solid "+(pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C")+"44",marginBottom:12}},
+        el("span",{style:{fontSize:12,fontWeight:700,color:pointMort<5?"#19A979":pointMort<10?"#F2B53C":pointMort<15?"#E8743B":"#C8516C"}},
+          pointMort<5?"Acheter est clairement avantageux":pointMort<10?"Acheter devient intéressant à moyen terme":pointMort<15?"Dépend de ton horizon, restez vigilant":"Louer peut être plus rationnel sur cette durée")),
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Indicateurs contextuels"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+        (function(){
+          var effortMensuel=mensualite+(chAn/12)-loyerM;
+          var rendLocatif=P>0&&loyerM>0?(loyerM*12/P)*100:0;
+          var intPremier=capital>0?capital*(tauxAn/100/12):0;
+          var capPremier=mensualite-intPremier;
+          var soldeFinPret=0;
+          var intDernier=0, capDernier=0;
+          if(capital>0&&n>0){
+            var rr=tauxAn/100/12, s=capital;
+            for(var mm=0;mm<n-1;mm++){ s-=(mensualite-s*rr); }
+            if(s<0) s=0;
+            intDernier=s*rr; capDernier=mensualite-intDernier;
+          }
+          return [
+            capital>0&&el("div",{key:"effort",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
+                el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Effort mensuel vs location"),
+                el("span",{style:{fontWeight:700,color:effortMensuel>0?"#E8743B":"#19A979"}},effortMensuel>0?"+":"")+fmt(effortMensuel)),
+              el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:4}},
+                effortMensuel>0?"Acheter coûte "+fmt(effortMensuel)+" de plus par mois que louer":"Acheter coûte moins cher que louer chaque mois")),
+            P>0&&loyerM>0&&el("div",{key:"rend",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+              el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
+                el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Rendement locatif implicite"),
+                el("span",{style:{fontWeight:700,color:rendLocatif>=5?"#19A979":rendLocatif>=3?"#F2B53C":"#C8516C"}},rendLocatif.toFixed(2)+" %")),
+              el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:4}},"Loyer annuel / prix — un taux bas indique un bien cher par rapport au marché locatif")),
+            capital>0&&el("div",{key:"amort",style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+              el("div",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)",marginBottom:8}},"Amortissement 1ère vs dernière mensualité"),
+              el("div",{style:{display:"flex",gap:16}},
+                el("div",null,
+                  el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:3}},"1ère mensualité — "+fmt(mensualite)),
+                  el("div",{style:{display:"flex",height:8,borderRadius:8,overflow:"hidden",width:120}},
+                    el("div",{style:{width:mensualite>0?(capPremier/mensualite*100)+"%":"0%",background:"#19A979"}}),
+                    el("div",{style:{flex:1,background:"#E8743B"}})),
+                  el("div",{style:{display:"flex",gap:8,marginTop:4,fontSize:11}},
+                    el("span",{style:{color:"#19A979"}},fmt(capPremier)+" capital"),
+                    el("span",{style:{color:"#E8743B"}},fmt(intPremier)+" intérêts"))),
+                el("div",null,
+                  el("div",{style:{fontSize:11,color:"var(--text-3)",marginBottom:3}},"Dernière mensualité"),
+                  el("div",{style:{display:"flex",height:8,borderRadius:8,overflow:"hidden",width:120}},
+                    el("div",{style:{width:mensualite>0?(capDernier/mensualite*100)+"%":"0%",background:"#19A979"}}),
+                    el("div",{style:{flex:1,background:"#E8743B"}})),
+                  el("div",{style:{display:"flex",gap:8,marginTop:4,fontSize:11}},
+                    el("span",{style:{color:"#19A979"}},fmt(capDernier)+" capital"),
+                    el("span",{style:{color:"#E8743B"}},fmt(intDernier)+" intérêts")))))
+          ];
+        })()),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"12px 0 0"}},"Hors inflation, hypothèses simplifiées. Coût net achat = mensualités + frais notaire + charges − valeur revente. Coût net location = loyers + charges − rendement sur l'apport placé.")));
 }
 
 // ---- Simulateur : PER — déduction fiscale ----
@@ -2675,6 +2818,17 @@ function PerSimulator({onBack}){
         el("div",{style:{fontSize:12,color:"var(--text-3)",marginBottom:4}},"Économie d'impôt cette année"),
         el("div",{style:{fontSize:32,fontWeight:800,color:"#19A979"}},fmt(economieFiscale)),
         el("div",{style:{fontSize:13,color:"var(--text-3)",marginTop:4}},"Coût net réel : ",el("strong",null,fmt(coutNet))," / an")),
+      el("div",{style:{background:"#945ECF0f",border:"1px solid #945ECF28",borderRadius:14,padding:"14px 16px",marginBottom:14}},
+        el("div",{style:{fontSize:12.5,fontWeight:700,color:"#945ECF",marginBottom:10}},"Effort réel vs bénéfice fiscal"),
+        el("div",{style:{fontSize:13,color:"var(--text-2)",marginBottom:8}},"Tu verses ",el("strong",null,fmt(versementEffectif))," → l'État rembourse ",el("strong",{style:{color:"#19A979"}},fmt(economieFiscale))," → coût réel : ",el("strong",{style:{color:"#945ECF"}},fmt(coutNet))),
+        el("div",{style:{display:"flex",height:14,borderRadius:10,overflow:"hidden",marginTop:8}},
+          el("div",{style:{width:versementEffectif>0?((coutNet/versementEffectif)*100)+"%":"0%",background:"#945ECF",display:"flex",alignItems:"center",justifyContent:"center"}},
+            el("span",{style:{fontSize:9,color:"#fff",fontWeight:700,whiteSpace:"nowrap",padding:"0 4px"}},"Coût réel")),
+          el("div",{style:{flex:1,background:"#19A979",display:"flex",alignItems:"center",justifyContent:"center"}},
+            el("span",{style:{fontSize:9,color:"#fff",fontWeight:700,whiteSpace:"nowrap",padding:"0 4px"}},"État"))),
+        el("div",{style:{display:"flex",gap:12,marginTop:8,fontSize:11}},
+          el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#945ECF"}}),el("span",{style:{color:"var(--text-3)"}},"Ton coût net : "+fmt(coutNet))),
+          el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#19A979"}}),el("span",{style:{color:"var(--text-3)"}},"Remboursé par l'État : "+fmt(economieFiscale))))),
       el("div",{style:{display:"flex",gap:10,marginBottom:14}},
         optBox("Capital 10 ans",cap10,"#945ECF"),
         optBox("Capital 20 ans",cap20,"#945ECF"),
@@ -2697,7 +2851,36 @@ function PerSimulator({onBack}){
                 el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-3)"}},fmt(verses)),
                 el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#19A979"}},fmt(cap-verses)));
             })))),
-      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:0}},"Fiscalité à la sortie estimée (TMI retraite ≈ "+Math.round(tmiRetraite)+"%) : ",el("strong",null,fmt(fiscaliteSortie)),". Hypothèses simplifiées, hors cotisations sociales.")));
+      el("div",{style:{height:1,background:"var(--border-2)",margin:"14px 0"}}),
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"À la sortie (estimation)"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+        el("div",{style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+          el("div",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)",marginBottom:6}},"Sortie en capital"),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+            el("span",{style:{color:"var(--text-3)"}},"Capital accumulé"),
+            el("span",{style:{fontWeight:700,color:"#945ECF"}},fmt(capRetraite))),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+            el("span",{style:{color:"var(--text-3)"}},"Impôt estimé à la sortie (TMI "+Math.round(tmiRetraite)+"%)"),
+            el("span",{style:{fontWeight:700,color:"#E8743B"}},fmt(fiscaliteSortie))),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6,marginTop:4}},
+            el("span",null,"Net après fiscalité"),
+            el("span",{style:{color:"#19A979"}},fmt(capRetraite-fiscaliteSortie)))),
+        el("div",{style:{background:"var(--surface-2)",borderRadius:12,padding:"10px 14px"}},
+          el("div",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)",marginBottom:6}},"Sortie en rente (hypothèse 20 ans)"),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+            el("span",{style:{color:"var(--text-3)"}},"Rente mensuelle estimée"),
+            el("span",{style:{fontWeight:700,color:"#945ECF"}},fmt(capRetraite/240)+" / mois"))),
+        el("div",{style:{background:"#19A97912",border:"1px solid #19A97930",borderRadius:12,padding:"10px 14px"}},
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+            el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Total versements cumulés"),
+            el("span",{style:{fontWeight:700}},fmt(versementEffectif*DR))),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+            el("span",{style:{color:"var(--text-2)",fontWeight:600}},"Économies fiscales totales"),
+            el("span",{style:{fontWeight:700,color:"#19A979"}},fmt(economieFiscale*DR))),
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:800,borderTop:"1px solid #19A97930",paddingTop:6,marginTop:4}},
+            el("span",null,"Gain net global (capital − impôt sortie − versements nets)"),
+            el("span",{style:{color:"#19A979"}},fmt(capRetraite-fiscaliteSortie-(versementEffectif*DR-economieFiscale*DR)))))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:"10px 0 0"}},"Fiscalité à la sortie estimée (TMI retraite ≈ "+Math.round(tmiRetraite)+"%). Hypothèses simplifiées, hors cotisations sociales.")));
 }
 
 function OutilsScreen(props){
