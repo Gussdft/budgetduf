@@ -1836,6 +1836,12 @@ function ToolBack({onBack}){
   return el("button",{onClick:onBack,style:{display:"flex",alignItems:"center",gap:4,border:"none",background:"transparent",color:"#1D8BCE",fontSize:15,fontWeight:600,cursor:"pointer",padding:"4px 0",marginBottom:4}},
     el(Icon,{name:"chevron-left",size:18,color:"#1D8BCE"}),"Outils");
 }
+function ToolInfo({color,children}){
+  var c=color||"#1D8BCE";
+  return el("div",{style:{background:c+"0f",border:"1px solid "+c+"28",borderRadius:14,padding:"11px 14px",display:"flex",gap:10,alignItems:"flex-start"}},
+    el("span",{style:{fontSize:16,lineHeight:1,marginTop:1}},"ℹ️"),
+    el("p",{style:{margin:0,fontSize:12.5,color:"var(--text-2)",lineHeight:1.6}}),children);
+}
 function bigNumber(value,color){
   return el("div",{style:{fontSize:30,fontWeight:800,letterSpacing:"-0.5px",color:color||"var(--text)"}},value);
 }
@@ -1886,6 +1892,7 @@ function IRSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Impôt sur le revenu"),
+    el(ToolInfo,{color:"#C8516C"},"Estime ton impôt net à payer sur tes revenus de l'année. Renseigne ton revenu net imposable (salaire après abattement 10 %), ta situation (célibataire, couple, enfants) et les éventuelles réductions (dons, garde d'enfants). Le résultat est une estimation — ton avis d'imposition officiel peut différer."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Revenu net imposable annuel du foyer (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 60000",onChange:function(e){setRevenu(e.target.value);}}),
@@ -1984,6 +1991,7 @@ function LoanSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Simulateur de prêt"),
+    el(ToolInfo,{color:"#1D8BCE"},"Calcule la mensualité d'un crédit et son coût total. Renseigne le montant emprunté (prix − apport), le taux annuel proposé par la banque et la durée. Tu peux aussi partir de la mensualité max que tu peux payer pour connaître ta capacité d'emprunt."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Montant emprunté (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:montant,placeholder:"ex : 200000",onChange:function(e){setMontant(e.target.value);}}),
@@ -2220,6 +2228,7 @@ function PfuSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Flat tax vs barème"),
+    el(ToolInfo,{color:"#945ECF"},"Quand tu reçois des dividendes ou que tu vends des actions avec une plus-value, tu peux choisir entre la flat tax (30 % fixe, simple) ou le barème progressif de l'IR (potentiellement moins cher si ton TMI est faible). Renseigne le montant brut reçu et ton TMI pour savoir quelle option est la plus avantageuse."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Montant brut (dividendes ou plus-value) (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:montant,placeholder:"ex : 10000",onChange:function(e){setMontant(e.target.value);}}),
@@ -2285,7 +2294,8 @@ function AchatLocSimulator({onBack}){
   };
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
-    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location"),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location voiture"),
+    el(ToolInfo,{color:"#F2B53C"},"Compare le coût réel d'acheter une voiture versus la louer (LLD/LOA) sur une même durée. L'achat prend en compte la décote (perte de valeur annuelle) et l'entretien ; la location prend en compte l'apport initial et les loyers mensuels. Le résultat te montre quelle option revient moins cher au total sur la période."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Durée de détention / usage"),
       el("div",{style:{display:"flex",gap:8}},
@@ -2359,6 +2369,7 @@ function CompoundInterestSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Intérêts composés"),
+    el(ToolInfo,{color:"#19A979"},"Les intérêts composés, c'est \"les intérêts qui produisent des intérêts\". Renseigne ton capital de départ, ce que tu verses chaque mois, le rendement annuel espéré (livret A = 3 %, ETF monde ≈ 7-9 % sur 20 ans) et la durée. Le tableau montre l'effet boule de neige année après année."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Capital initial (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:capital,placeholder:"ex : 5000",onChange:function(e){setCapital(e.target.value);}}),
@@ -2447,6 +2458,7 @@ function ProjectionSimulator(props){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Projection long terme"),
+    el(ToolInfo,{color:"#1D8BCE"},"Simule la valeur de ton patrimoine à un âge cible (retraite ou autre). Le capital de départ est pré-rempli avec tes cagnottes + placements actuels. Si tu définis un objectif, l'outil calcule combien d'années il te faut pour l'atteindre avec tes versements et ton taux de rendement."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Capital actuel (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:capital,placeholder:"ex : 10000",onChange:function(e){setCapital(e.target.value);}}),
@@ -2567,6 +2579,7 @@ function ImmoSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location immobilier"),
+    el(ToolInfo,{color:"#19A979"},"La question clé : à partir de quand acheter coûte moins cher que louer ? Ce simulateur compare le coût total sur X ans (mensualités + notaire + charges − revente estimée) versus les loyers cumulés. L'apport investi ailleurs (coût d'opportunité) est aussi pris en compte pour une comparaison juste."),
     el("div",{style:S.section},
       el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Achat"),
       el("div",{style:{display:"flex",gap:10,marginBottom:10}},
@@ -2640,6 +2653,7 @@ function PerSimulator({onBack}){
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el(ToolBack,{onBack:onBack}),
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"PER — déduction fiscale"),
+    el(ToolInfo,{color:"#945ECF"},"Le Plan d'Épargne Retraite (PER) permet de déduire tes versements de ton revenu imposable cette année. Concrètement : si tu verses 3 000 € et que tu es à 30 % de TMI, l'État te rembourse 900 € via ta déclaration. L'argent est bloqué jusqu'à la retraite (sauf cas exceptionnels) et sera imposé à la sortie — mais souvent à un TMI plus faible."),
     el("div",{style:S.section},
       el("label",{style:S.fieldLabel},"Revenu net imposable (€)"),
       el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 45000",onChange:function(e){setRevenu(e.target.value);}}),
@@ -2702,31 +2716,61 @@ function OutilsScreen(props){
   if(view==="projection") return el(ProjectionSimulator,{onBack:back,startCapital:startCapital});
   if(view==="immo") return el(ImmoSimulator,{onBack:back});
   if(view==="per") return el(PerSimulator,{onBack:back});
-  var cards=[
-    {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton impôt 2025 (revenus 2024)"},
-    {id:"pret",icon:"car",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût, capacité d'emprunt"},
-    {id:"compose",icon:"trending-up",color:"#19A979",title:"Intérêts composés",sub:"Capital + versements → valeur future"},
-    {id:"projection",icon:"trending-up",color:"#1D8BCE",title:"Projection long terme",sub:"Retraite & objectifs de capital"},
-    {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Dividendes & plus-values"},
-    {id:"achatloc",icon:"git-compare",color:"#F2B53C",title:"Achat vs Location",sub:"Voiture : LLD/LOA ou achat"},
-    {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Actifs − passifs = patrimoine net"},
-    {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Suivi des échéances de l'année"},
-    {id:"immo",icon:"house",color:"#19A979",title:"Achat vs Location immo",sub:"Calcule le point mort et le coût réel"},
-    {id:"per",icon:"briefcase",color:"#945ECF",title:"PER — déduction fiscale",sub:"Économie d'impôt et capital retraite"},
+  var categories=[
+    {
+      label:"Fiscalité",icon:"percent",color:"#C8516C",
+      tools:[
+        {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton IR 2025 selon tes revenus, situation familiale et parts fiscales"},
+        {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Compare les 2 régimes d'imposition sur tes dividendes ou plus-values mobilières"},
+        {id:"per",icon:"briefcase",color:"#945ECF",title:"PER — déduction fiscale",sub:"Calcule ton économie d'impôt immédiate et ton capital estimé à la retraite"},
+        {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Centralise tes échéances (CFE, taxe foncière, acomptes IR…) pour ne rien oublier"},
+      ]
+    },
+    {
+      label:"Immobilier & Crédit",icon:"house",color:"#19A979",
+      tools:[
+        {id:"immo",icon:"house",color:"#19A979",title:"Achat vs Location immo",sub:"Calcule le point mort, la mensualité réelle et le coût d'opportunité de l'apport"},
+        {id:"pret",icon:"coins",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût total et capacité d'emprunt selon ton taux et ta durée"},
+      ]
+    },
+    {
+      label:"Épargne & Patrimoine",icon:"trending-up",color:"#1D8BCE",
+      tools:[
+        {id:"compose",icon:"trending-up",color:"#19A979",title:"Intérêts composés",sub:"Projette la croissance d'un capital avec versements réguliers et taux de rendement"},
+        {id:"projection",icon:"target",color:"#1D8BCE",title:"Projection long terme",sub:"Simule la valeur de ton patrimoine à la retraite ou à un âge cible"},
+        {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Synthèse actifs − passifs : immo, voiture, placements, dettes"},
+      ]
+    },
+    {
+      label:"Vie quotidienne",icon:"car",color:"#F2B53C",
+      tools:[
+        {id:"achatloc",icon:"git-compare",color:"#F2B53C",title:"Achat vs Location voiture",sub:"Compare LLD/LOA et achat comptant sur la durée, entretien inclus"},
+      ]
+    },
   ];
-  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Outils"),
-    el("p",{style:{margin:"-6px 0 4px",fontSize:13,color:"var(--text-3)"}},"Simulateurs patrimoniaux"),
-    el("div",{style:{display:"flex",flexDirection:"column",gap:12}},
-      cards.map(function(c){
-        return el("button",{key:c.id,onClick:function(){setView(c.id);},
-          style:{display:"flex",alignItems:"center",gap:14,textAlign:"left",background:"var(--surface)",borderRadius:18,padding:16,border:"none",boxShadow:"var(--shadow-card)",cursor:"pointer"}},
-          el("div",{style:{width:46,height:46,borderRadius:13,background:c.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:c.icon,size:22,color:c.color})),
-          el("div",{style:{flex:1,minWidth:0}},
-            el("div",{style:{fontSize:15.5,fontWeight:700,color:"var(--text)"}},c.title),
-            el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginTop:2}},c.sub)),
-          el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"}));
-      })));
+  function toolCard(c){
+    return el("button",{key:c.id,onClick:function(){setView(c.id);},
+      style:{display:"flex",alignItems:"center",gap:14,textAlign:"left",background:"var(--surface)",borderRadius:16,padding:"13px 14px",border:"none",boxShadow:"var(--shadow-card)",cursor:"pointer",width:"100%"}},
+      el("div",{style:{width:42,height:42,borderRadius:12,background:c.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+        el(Icon,{name:c.icon,size:20,color:c.color})),
+      el("div",{style:{flex:1,minWidth:0}},
+        el("div",{style:{fontSize:15,fontWeight:700,color:"var(--text)"}},c.title),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:3,lineHeight:1.4}},c.sub)),
+      el(Icon,{name:"chevron-right",size:16,color:"var(--text-3)"}));
+  }
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:20}},
+    el("div",null,
+      el("h2",{style:{margin:"0 0 2px",fontSize:20,fontWeight:800}},"Outils"),
+      el("p",{style:{margin:0,fontSize:13,color:"var(--text-3)"}},"Simulateurs & calculateurs financiers")),
+    categories.map(function(cat){
+      return el("div",{key:cat.label},
+        el("div",{style:{display:"flex",alignItems:"center",gap:7,marginBottom:10}},
+          el("div",{style:{width:22,height:22,borderRadius:7,background:cat.color+"22",display:"flex",alignItems:"center",justifyContent:"center"}},
+            el(Icon,{name:cat.icon,size:13,color:cat.color})),
+          el("span",{style:{fontSize:12,fontWeight:800,color:cat.color,textTransform:"uppercase",letterSpacing:"0.6px"}}),cat.label),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          cat.tools.map(toolCard)));
+    }));
 }
 
 // ----------------------------------------------------------------------------
