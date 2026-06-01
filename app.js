@@ -526,8 +526,8 @@ function App(){
           el("h1",{style:S.title},"Budget du foyer"),
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne")))),
 
-    // month nav
-    el("div",{style:S.monthNav},
+    // month nav (masqué sur Outils et Réglages — pas pertinent)
+    (tab!=="outils"&&tab!=="reglages") && el("div",{style:S.monthNav},
       el("button",{style:S.navBtn,onClick:()=>changeMonth(-1)},el(Icon,{name:"chevron-left",size:20})),
       el("span",{style:S.monthLabel},`${MONTHS_FR[month]} ${year}`),
       el("button",{style:S.navBtn,onClick:()=>changeMonth(1)},el(Icon,{name:"chevron-right",size:20}))),
@@ -592,10 +592,10 @@ function App(){
     el("nav",{style:S.tabBar},
       [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
-        return el("button",{key:id,style:Object.assign({},S.tabBtn,on?{color:"#1D8BCE",background:"rgba(29,139,206,.12)"}:{}),onClick:function(){setTab(id);}},
-          el("span",{style:{display:"flex",transform:on?"translateY(-1px) scale(1.06)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
+        return el("button",{key:id,style:Object.assign({},S.tabBtn,on?{color:"#1D8BCE"}:{}),onClick:function(){setTab(id);}},
+          el("span",{style:{display:"flex",transform:on?"scale(1.04)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
             el(Icon,{name:icon,size:23,color:on?"#1D8BCE":"var(--text-3)"})),
-          el("span",{style:{fontSize:10.5,fontWeight:on?700:500,letterSpacing:on?"-0.1px":0,transition:"font-weight .2s ease"}},label));
+          el("span",{style:{fontSize:10.5,fontWeight:on?700:500,letterSpacing:"-0.1px",color:on?"#1D8BCE":"var(--text-3)",transition:"all .2s ease"}},label));
       })),
 
     // Modals
@@ -2055,7 +2055,7 @@ const S = {
   title:{margin:0,fontSize:26,fontWeight:800,letterSpacing:"-0.6px"},
   subtitle:{margin:0,fontSize:12,color:"var(--text-3)"},
   iconBtn:{width:38,height:38,borderRadius:12,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text-2)"},
-  tabBar:{position:"fixed",left:14,right:14,bottom:"calc(8px + env(safe-area-inset-bottom))",zIndex:90,display:"flex",justifyContent:"space-around",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(30px) saturate(180%)",backdropFilter:"blur(30px) saturate(180%)",border:"1px solid var(--glass-border)",borderRadius:30,padding:"8px 6px",boxShadow:"0 10px 36px rgba(0,0,0,0.18), 0 1px 0 var(--glass-border) inset"},
+  tabBar:{position:"fixed",left:16,right:16,bottom:"calc(10px + env(safe-area-inset-bottom))",zIndex:90,display:"flex",justifyContent:"space-around",background:"var(--glass-bg-strong)",WebkitBackdropFilter:"blur(40px) saturate(180%)",backdropFilter:"blur(40px) saturate(180%)",border:"1px solid var(--glass-border)",borderRadius:32,padding:"9px 4px",boxShadow:"0 12px 40px rgba(0,0,0,0.16)"},
   tabBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,border:"none",background:"transparent",cursor:"pointer",padding:"6px 0",color:"var(--text-3)",maxWidth:120,borderRadius:18},
   tabActive:{color:"#1D8BCE"},
   monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"var(--glass-bg)",borderRadius:16,padding:10,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
