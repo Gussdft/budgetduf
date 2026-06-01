@@ -1949,6 +1949,178 @@ function calcSalaire(brutMens, cadre) {
   };
 }
 
+// ---- Simulateur : Revenu disponible — simulation complète ----
+function RevenusSimulator({onBack}){
+  const [mode,setMode]=useState("solo"); // "solo" | "couple"
+  const [brut1,setBrut1]=useState("");
+  const [brut2,setBrut2]=useState("");
+  const [statut1,setStatut1]=useState("noncadre");
+  const [statut2,setStatut2]=useState("noncadre");
+  const [enfants,setEnfants]=useState(0);
+  const [chargesFixes,setChargesFixes]=useState("");
+  const [tauxPAS1,setTauxPAS1]=useState("");
+  const [tauxPAS2,setTauxPAS2]=useState("");
+
+  var B1=parseFloat(brut1)||0;
+  var B2=mode==="couple"?(parseFloat(brut2)||0):0;
+  var c1=calcSalaire(B1,statut1==="cadre");
+  var c2=mode==="couple"&&B2>0?calcSalaire(B2,statut2==="cadre"):null;
+
+  var netMens1=c1.net;
+  var netMens2=c2?c2.net:0;
+  var netFoyer=netMens1+netMens2;
+
+  // IR annuel du foyer
+  var situation=mode==="couple"?"couple":"celibataire";
+  var parts=irParts(situation,enfants);
+  var partsBase=mode==="couple"?2:1;
+  var revImposableAn=(c1.netImposable+(c2?c2.netImposable:0))*12;
+  var quotient=parts>0?revImposableAn/parts:0;
+  var impotParts=Math.max(0,irTaxOnQuotient(quotient)*parts);
+  var impotBase=Math.max(0,irTaxOnQuotient(partsBase>0?revImposableAn/partsBase:0)*partsBase);
+  var demiParts=(parts-partsBase)*2;
+  var plafEnf=IR_PLAFOND_DEMI_PART*demiParts;
+  var impotBrut=impotParts;
+  if(demiParts>0&&(impotBase-impotParts)>plafEnf){impotBrut=impotBase-plafEnf;}
+  var decote=irDecote(impotBrut,mode==="couple");
+  var impotAn=Math.max(0,impotBrut-decote);
+  var impotMens=impotAn/12;
+
+  // PAS effectif si renseigné
+  var pas1=parseFloat(tauxPAS1)||0;
+  var pas2=parseFloat(tauxPAS2)||0;
+  var pasMens1=pas1>0?c1.netImposable*pas1/100:0;
+  var pasMens2=c2&&pas2>0?c2.netImposable*pas2/100:0;
+  var pasMensFoyer=pasMens1+pasMens2;
+
+  var chF=parseFloat(chargesFixes)||0;
+
+  // On utilise le PAS si renseigné, sinon l'IR estimé
+  var impotMensEffectif=pasMensFoyer>0?pasMensFoyer:impotMens;
+  var netApresImpot=netFoyer-impotMensEffectif;
+  var disponible=netApresImpot-chF;
+
+  var tauxGlobalCotis=B1+B2>0?(c1.totalCotis+(c2?c2.totalCotis:0))/(B1+B2)*100:0;
+  var tauxIR=revImposableAn>0?(impotAn/revImposableAn)*100:0;
+  var tauxGlobal=B1+B2>0?((c1.totalCotis+(c2?c2.totalCotis:0))+impotAn/12)/(B1+B2)*100:0;
+
+  // Barre de décomposition visuelle
+  var brutTotal=B1+B2;
+  var cotisTotal=(c1.totalCotis+(c2?c2.totalCotis:0));
+  var pctCotis=brutTotal>0?(cotisTotal/brutTotal)*100:0;
+  var pctImpot=brutTotal>0?(impotMensEffectif/brutTotal)*100:0;
+  var pctCharges=brutTotal>0?(chF/brutTotal)*100:0;
+  var pctDispo=Math.max(0,100-pctCotis-pctImpot-pctCharges);
+
+  var statBtn=function(val,set,cur){
+    return el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:8,padding:2,gap:1}},
+      [["noncadre","Non-c."],["cadre","Cadre"]].map(function(o){
+        var on=cur===o[0];
+        return el("button",{key:o[0],onClick:function(){set(o[0]);},
+          style:{flex:1,padding:"5px 4px",borderRadius:6,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:400,fontSize:11.5,cursor:"pointer"}},o[1]);
+      }));
+  };
+  var step=function(num,label,color,montant,note){
+    return el("div",{style:{display:"flex",alignItems:"flex-start",gap:12,padding:"10px 0",borderBottom:"1px solid var(--border-2)"}},
+      el("div",{style:{width:24,height:24,borderRadius:12,background:color+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}},
+        el("span",{style:{fontSize:11,fontWeight:800,color:color}},num)),
+      el("div",{style:{flex:1}},
+        el("div",{style:{fontSize:13,color:"var(--text-2)"}},label)),
+      el("div",{style:{fontSize:14,fontWeight:700,color:color,whiteSpace:"nowrap"}},montant),
+      note?el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:2}},note):null);
+  };
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Revenu disponible"),
+    el(ToolInfo,{color:"#945ECF"},"Ce simulateur fait le chemin complet : salaire brut → cotisations sociales → net → impôt sur le revenu → charges fixes → ce qu'il reste vraiment. Tout en une seule page."),
+
+    el("div",{style:S.section},
+      el("div",{style:{display:"flex",background:"var(--surface-2)",borderRadius:10,padding:3,gap:2,marginBottom:12}},
+        [["solo","Solo"],["couple","Couple"]].map(function(o){
+          var on=mode===o[0];
+          return el("button",{key:o[0],onClick:function(){setMode(o[0]);},
+            style:{flex:1,padding:"9px 0",borderRadius:8,border:"none",background:on?"var(--surface)":"transparent",color:on?"var(--text)":"var(--text-3)",fontWeight:on?700:500,fontSize:14,cursor:"pointer"}},o[1]);
+        })),
+      el("div",{style:{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}},
+        el("div",{style:{flex:1}},
+          el("label",{style:S.fieldLabel},mode==="couple"?"Salaire brut (déclarant 1)":"Salaire brut mensuel"),
+          el("input",{type:"number",inputMode:"decimal",style:S.input,value:brut1,placeholder:"ex : 3000",onChange:function(e){setBrut1(e.target.value);}})),
+        el("div",{style:{width:120}},
+          el("label",{style:S.fieldLabel},"Statut"),
+          statBtn("noncadre",setStatut1,statut1))),
+      mode==="couple"?el("div",{style:{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}},
+        el("div",{style:{flex:1}},
+          el("label",{style:S.fieldLabel},"Salaire brut (déclarant 2)"),
+          el("input",{type:"number",inputMode:"decimal",style:S.input,value:brut2,placeholder:"ex : 2500",onChange:function(e){setBrut2(e.target.value);}})),
+        el("div",{style:{width:120}},
+          el("label",{style:S.fieldLabel},"Statut"),
+          statBtn("noncadre",setStatut2,statut2))):null,
+      mode==="couple"&&B1>0?el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux PAS déclarant 1 (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS1,placeholder:"ex : 5.3",onChange:function(e){setTauxPAS1(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux PAS déclarant 2 (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS2,placeholder:"ex : 3.1",onChange:function(e){setTauxPAS2(e.target.value);}}))
+      ):B1>0?el("div",{style:{marginBottom:10}},el("label",{style:S.fieldLabel},"Taux prélèvement à la source (%, optionnel)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:tauxPAS1,placeholder:"ex : 5.3",onChange:function(e){setTauxPAS1(e.target.value);}})):null,
+      mode==="couple"?el("div",{style:{marginBottom:10}},
+        el("label",{style:S.fieldLabel},"Enfants à charge"),
+        el("div",{style:{display:"flex",alignItems:"center",gap:12}},
+          el("button",{onClick:function(){setEnfants(Math.max(0,enfants-1));},style:S.navBtn},el(Icon,{name:"chevron-left",size:18})),
+          el("span",{style:{fontSize:18,fontWeight:700,minWidth:30,textAlign:"center"}},enfants),
+          el("button",{onClick:function(){setEnfants(enfants+1);},style:S.navBtn},el(Icon,{name:"chevron-right",size:18})),
+          el("span",{style:{fontSize:13,color:"var(--text-3)",marginLeft:6}},parts+" part"+(parts>1?"s":"")+", plafond QF"))):null,
+      el("label",{style:S.fieldLabel},"Charges fixes mensuelles (loyer, crédits, abonnements…)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesFixes,placeholder:"ex : 1500",onChange:function(e){setChargesFixes(e.target.value);}})),
+
+    B1>0?el("div",{style:S.section},
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:12}},"Résumé du foyer / mois"),
+      el("div",{style:{marginBottom:16}},
+        el("div",{style:{display:"flex",height:22,borderRadius:11,overflow:"hidden"}},
+          el("div",{style:{width:pctCotis+"%",background:"#C8516C",transition:"width .4s"}}),
+          el("div",{style:{width:pctImpot+"%",background:"#E8743B",transition:"width .4s"}}),
+          el("div",{style:{width:pctCharges+"%",background:"#F2B53C",transition:"width .4s"}}),
+          el("div",{style:{flex:1,background:"#19A979",transition:"width .4s"}})),
+        el("div",{style:{display:"flex",flexWrap:"wrap",gap:"4px 14px",marginTop:8,fontSize:11}},
+          el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#C8516C"}}),el("span",{style:{color:"var(--text-3)"}},"Cotisations ("+pctCotis.toFixed(0)+"%)")),
+          el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#E8743B"}}),el("span",{style:{color:"var(--text-3)"}},"Impôt ("+pctImpot.toFixed(0)+"%)")),
+          chF>0?el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#F2B53C"}}),el("span",{style:{color:"var(--text-3)"}},"Charges fixes ("+pctCharges.toFixed(0)+"%)")):null,
+          el("span",{style:{display:"flex",alignItems:"center",gap:4}},el("span",{style:{display:"inline-block",width:8,height:8,borderRadius:2,background:"#19A979"}}),el("span",{style:{color:"var(--text-3)"}},"Disponible ("+pctDispo.toFixed(0)+"%)")),
+        )),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},"Salaire(s) brut"),
+        el("span",{style:{fontWeight:700}},fmt(brutTotal))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},"Cotisations sociales"),
+        el("span",{style:{fontWeight:700,color:"#C8516C"}},"- "+fmt(cotisTotal))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,fontWeight:700,borderBottom:"2px solid var(--border)"}},
+        el("span",null,"Net à payer"),
+        el("span",{style:{color:"var(--text)"}},fmt(netFoyer))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+        el("span",{style:{color:"var(--text-2)"}},(pasMensFoyer>0?"Prélèvement à la source (PAS)":"Impôt sur le revenu (estimé)")),
+        el("span",{style:{fontWeight:700,color:"#E8743B"}},"- "+fmt(impotMensEffectif))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,fontWeight:700,borderBottom:chF>0?"2px solid var(--border)":"none"}},
+        el("span",null,"Net après impôt"),
+        el("span",{style:{color:"var(--text)"}},fmt(netApresImpot))),
+      chF>0?el("div",null,
+        el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:14,borderBottom:"1px solid var(--border-2)"}},
+          el("span",{style:{color:"var(--text-2)"}},"Charges fixes"),
+          el("span",{style:{fontWeight:700,color:"#F2B53C"}},"- "+fmt(chF))),
+        el("div",{style:{display:"flex",justifyContent:"space-between",padding:"9px 0",fontSize:16,fontWeight:800,borderTop:"2px solid var(--border)"}},
+          el("span",null,"Revenu disponible"),
+          el("span",{style:{color:disponible>=0?"#19A979":"#C8516C"}},fmt(disponible)))):null,
+      el("div",{style:{display:"flex",gap:12,marginTop:16,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Cotisations / brut"),el("div",{style:Object.assign({},S.bilanVal,{color:"#C8516C"})},tauxGlobalCotis.toFixed(1)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"IR / rev. imposable"),el("div",{style:Object.assign({},S.bilanVal,{color:"#E8743B"})},tauxIR.toFixed(1)+" %")),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Prélèvements totaux / brut"),el("div",{style:Object.assign({},S.bilanVal,{color:"#945ECF"})},tauxGlobal.toFixed(1)+" %"))),
+      el("div",{style:{marginTop:14,padding:"12px 14px",borderRadius:12,background:"#945ECF0f",border:"1px solid #945ECF28"}},
+        el("div",{style:{fontSize:12.5,fontWeight:700,color:"#945ECF",marginBottom:6}},"Ce que tu gardes vraiment"),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+          el("span",{style:{color:"var(--text-2)"}},"Net après cotis. + IR (avant charges)"),
+          el("span",{style:{fontWeight:700,color:"#19A979"}},fmt(netApresImpot)+" / mois")),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},
+          el("span",{style:{color:"var(--text-2)"}},"Sur 1 € brut gagné, il t'en reste"),
+          el("span",{style:{fontWeight:800,color:"#945ECF"}},brutTotal>0?((netApresImpot/brutTotal).toFixed(2)+" €"):"—"))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Cotisations : taux URSSAF 2025 (PMSS 3 925 €). IR : barème 2025 (revenus 2024) avec décote. Hors mutuelle, participation, réduction Fillon. IR estimé sur net imposable — peut différer du PAS personnalisé.")):null);
+}
+
 // ---- Simulateur : Salaire brut → net détaillé ----
 function SalaireSimulator({onBack}){
   const [brut,setBrut]=useState("");
@@ -3174,6 +3346,7 @@ function OutilsScreen(props){
   var potBalance=(props&&props.potBalance)||function(){return 0;};
   var startCapital=(props&&props.startCapital)||0;
   if(view==="ir") return el(IRSimulator,{onBack:back});
+  if(view==="revenus") return el(RevenusSimulator,{onBack:back});
   if(view==="salaire") return el(SalaireSimulator,{onBack:back});
   if(view==="pret") return el(LoanSimulator,{onBack:back});
   if(view==="bilan") return el(BilanSimulator,{onBack:back,pots:pots,potBalance:potBalance});
@@ -3189,7 +3362,8 @@ function OutilsScreen(props){
       label:"Fiscalité",icon:"percent",color:"#C8516C",
       tools:[
         {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton IR 2025 selon tes revenus, situation familiale et parts fiscales"},
-        {id:"salaire",icon:"coins",color:"#1D8BCE",title:"Salaire brut → net",sub:"Détail des cotisations, net imposable, net après impôt et coût employeur"},
+        {id:"revenus",icon:"target",color:"#945ECF",title:"Revenu disponible",sub:"Brut → cotisations → net → IR → charges → ce qu'il reste vraiment en poche"},
+        {id:"salaire",icon:"coins",color:"#1D8BCE",title:"Salaire brut → net",sub:"Détail des cotisations ligne par ligne — taux URSSAF 2025 officiels"},
         {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Compare les 2 régimes d'imposition sur tes dividendes ou plus-values mobilières"},
         {id:"per",icon:"briefcase",color:"#945ECF",title:"PER — déduction fiscale",sub:"Calcule ton économie d'impôt immédiate et ton capital estimé à la retraite"},
         {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Centralise tes échéances (CFE, taxe foncière, acomptes IR…) pour ne rien oublier"},
