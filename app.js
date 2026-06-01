@@ -424,8 +424,7 @@ function App(){
         el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
         el("div",null,
           el("h1",{style:S.title},"Budget du foyer"),
-          el("p",{style:S.subtitle},"Revenus − dépenses → épargne"))),
-      el("div",{style:{display:"flex",gap:8}})),
+          el("p",{style:S.subtitle},"Revenus − dépenses → épargne")))),
 
     // month nav
     el("div",{style:S.monthNav},
@@ -561,8 +560,9 @@ function App(){
       [["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["projets","target","Projets"],["graphiques","bar-chart","Graphiques"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?S.tabActive:{}),onClick:function(){setTab(id);}},
-          el(Icon,{name:icon,size:22,color:on?"#1D8BCE":"var(--text-3)"}),
-          el("span",{style:{fontSize:10,fontWeight:on?700:500}},label));
+          el("span",{style:{display:"flex",transform:on?"translateY(-1px) scale(1.06)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
+            el(Icon,{name:icon,size:22,color:on?"#1D8BCE":"var(--text-3)"})),
+          el("span",{style:{fontSize:10,fontWeight:on?700:500,letterSpacing:on?"-0.1px":0,transition:"font-weight .2s ease"}},label));
       })),
 
     // Modals
