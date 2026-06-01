@@ -1381,8 +1381,6 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
   const total=items.reduce((s,x)=>s+(x.amount||0),0);
   const totalReel=showPrevus?items.reduce(function(s,x){return s+(parseFloat((reel||{})[x.id])||0);},0):0;
   const [newLabel,setNewLabel]=useState("");
-  const [emojiOpenId,setEmojiOpenId]=useState(null);
-  var QUICK_EMOJIS=["🏠","🚗","🍔","🛒","💊","✈️","🎮","👕","💡","📱","🐶","🎁"];
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
   var diffTotal=totalReel-total;
   return el("div",{style:S.section},
@@ -1400,7 +1398,6 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
       return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
         el("div",{style:S.lineRow},
           el("span",{style:{...S.lineDot,background:cfg.accent}}),
-          el("button",{title:"Ajouter un emoji",style:{background:"none",border:"none",cursor:"pointer",padding:"1px 3px",fontSize:14,lineHeight:1,color:"var(--text-3)"},onClick:function(){setEmojiOpenId(emojiOpenId===it.id?null:it.id);}},"😊"),
           el("input",{style:S.lineLabelInput,value:it.label,onChange:function(e){onRename(it.id,e.target.value);},placeholder:"Libellé"}),
           showPrevus && el("div",{style:{display:"flex",alignItems:"center",gap:6}},
             el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
@@ -1418,11 +1415,7 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("span",{style:S.eur},"€")),
           onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
-        emojiOpenId===it.id&&el("div",{style:{display:"flex",flexWrap:"wrap",gap:4,padding:"6px 8px",background:"var(--surface-2)",borderRadius:10,marginTop:2,marginLeft:20}},
-          QUICK_EMOJIS.map(function(em){
-            return el("button",{key:em,onClick:function(){onRename(it.id,em+" "+it.label);setEmojiOpenId(null);},
-              style:{background:"none",border:"none",cursor:"pointer",fontSize:18,padding:"2px 4px",borderRadius:6}},em);
-          })));
+        );
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
       el("span",{style:{color:"var(--text-3)"}},"Totaux"),
