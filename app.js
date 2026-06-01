@@ -584,7 +584,7 @@ function App(){
     if(undoTimer.current) clearTimeout(undoTimer.current);
   };
 
-  useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); },[]);
+  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
   useEffect(function(){
     if(!loaded) return;
     var payload={months:months,pots:pots,projects:projects,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
@@ -723,12 +723,35 @@ function App(){
     function avgCat(cat){
       var labelMap={};
       pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(!labelMap[line.label])labelMap[line.label]=[];labelMap[line.label].push(line.amount||0);});});
-      return Object.keys(labelMap).map(function(lbl){var ams=labelMap[lbl];var avg=Math.round(ams.reduce(function(s,a){return s+a;},0)/ams.length);return {id:uid(),label:lbl,amount:avg};});
+      return Object.keys(labelMap).map(function(lbl){var ams=labelMap[lbl];var avg=Math.round(ams.reduce(function(s,a){return s+a;},0)/ams.length);var recurringVals=[];pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(line.label===lbl&&line.recurring)recurringVals.push(true);});});return {id:uid(),label:lbl,amount:avg,recurring:recurringVals.length>0};});
     }
     setMonthData(function(){return {revenus:avgCat("revenus"),fixed:avgCat("fixed"),variable:avgCat("variable"),excep:[],deposits:[]};});
   };
   const copyPrev=()=>{const d=new Date(year,month-1,1);const pk=monthKey(d.getFullYear(),d.getMonth());const prev=months[pk];if(!prev)return;
-    setMonthData(()=>({revenus:prev.revenus.map(x=>({...x,id:uid()})),fixed:prev.fixed.map(x=>({...x,id:uid()})),variable:prev.variable.map(x=>({...x,id:uid()})),excep:prev.excep.map(x=>({...x,id:uid(),amount:0})),deposits:[]}));};
+    setMonthData(()=>({revenus:prev.revenus.map(function(x){return Object.assign({},x,{id:uid()});}),fixed:prev.fixed.map(function(x){return Object.assign({},x,{id:uid()});}),variable:prev.variable.map(function(x){return Object.assign({},x,{id:uid()});}),excep:prev.excep.map(function(x){return Object.assign({},x,{id:uid(),amount:0});}),deposits:[]}));};
+  const toggleRecurring=function(kind,id){setMonthData(function(c){
+    return Object.assign({},c,{[kind]:c[kind].map(function(x){
+      return x.id===id?Object.assign({},x,{recurring:!x.recurring}):x;
+    })});
+  });};
+  const autoFillRecurring=function(loadedMonths){
+    var mk2=monthKey(year,month);
+    var cur=loadedMonths[mk2];
+    var hasData=cur&&(((cur.revenus||[]).length>0)||((cur.fixed||[]).length>0)||((cur.variable||[]).length>0));
+    if(hasData) return;
+    var d2=new Date(year,month-1,1);
+    var pk=monthKey(d2.getFullYear(),d2.getMonth());
+    var prev=loadedMonths[pk];
+    if(!prev) return;
+    var cats=["revenus","fixed","variable","excep"];
+    var newData={deposits:[]};
+    cats.forEach(function(cat){
+      newData[cat]=(prev[cat]||[]).filter(function(x){return x.recurring;}).map(function(x){return Object.assign({},x,{id:uid(),amount:cat==="excep"?0:x.amount});});
+    });
+    var hasRecurring=cats.some(function(cat){return newData[cat].length>0;});
+    if(!hasRecurring) return;
+    setMonths(function(m){return Object.assign({},m,{[mk2]:Object.assign({},blankMonth(),newData)});});
+  };
   const resetMonth=()=>setMonthData(()=>blankMonth());
 
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
@@ -795,7 +818,7 @@ function App(){
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
-        onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l)}))),
+        onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}))),
 
     // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(EpargnePanel,{
@@ -1354,10 +1377,12 @@ function flowRow(icon,color,label,val,valColor){
     el("span",{style:{...S.flowVal,color:valColor}},val));
 }
 
-function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd}){
+function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring}){
   const total=items.reduce((s,x)=>s+(x.amount||0),0);
   const totalReel=showPrevus?items.reduce(function(s,x){return s+(parseFloat((reel||{})[x.id])||0);},0):0;
   const [newLabel,setNewLabel]=useState("");
+  const [emojiOpenId,setEmojiOpenId]=useState(null);
+  var QUICK_EMOJIS=["🏠","🚗","🍔","🛒","💊","✈️","🎮","👕","💡","📱","🐶","🎁"];
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
   var diffTotal=totalReel-total;
   return el("div",{style:S.section},
@@ -1375,6 +1400,7 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
       return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
         el("div",{style:S.lineRow},
           el("span",{style:{...S.lineDot,background:cfg.accent}}),
+          el("button",{title:"Ajouter un emoji",style:{background:"none",border:"none",cursor:"pointer",padding:"1px 3px",fontSize:14,lineHeight:1,color:"var(--text-3)"},onClick:function(){setEmojiOpenId(emojiOpenId===it.id?null:it.id);}},"😊"),
           el("input",{style:S.lineLabelInput,value:it.label,onChange:function(e){onRename(it.id,e.target.value);},placeholder:"Libellé"}),
           showPrevus && el("div",{style:{display:"flex",alignItems:"center",gap:6}},
             el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
@@ -1390,7 +1416,13 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
               onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
             el("span",{style:S.eur},"€")),
-          el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))));
+          onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
+          el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
+        emojiOpenId===it.id&&el("div",{style:{display:"flex",flexWrap:"wrap",gap:4,padding:"6px 8px",background:"var(--surface-2)",borderRadius:10,marginTop:2,marginLeft:20}},
+          QUICK_EMOJIS.map(function(em){
+            return el("button",{key:em,onClick:function(){onRename(it.id,em+" "+it.label);setEmojiOpenId(null);},
+              style:{background:"none",border:"none",cursor:"pointer",fontSize:18,padding:"2px 4px",borderRadius:6}},em);
+          })));
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
       el("span",{style:{color:"var(--text-3)"}},"Totaux"),
@@ -2464,6 +2496,203 @@ function ProjectionSimulator(props){
       el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Intérêts capitalisés mensuellement. Hypothèse de rendement constant, hors inflation et fiscalité.")));
 }
 
+// ---- Simulateur : Achat immobilier vs Location ----
+function ImmoSimulator({onBack}){
+  const [prix,setPrix]=useState("");
+  const [apport,setApport]=useState("");
+  const [taux,setTaux]=useState("3.5");
+  const [duree,setDuree]=useState("20");
+  const [fraisNotaire,setFraisNotaire]=useState("7.5");
+  const [chargesAchat,setChargesAchat]=useState("0");
+  const [appreciation,setAppreciation]=useState("2");
+  const [loyer,setLoyer]=useState("");
+  const [chargesLoc,setChargesLoc]=useState("0");
+  const [revaloLoc,setRevaloLoc]=useState("1.5");
+  const [dureeAnalyse,setDureeAnalyse]=useState("20");
+  const [rendPlacement,setRendPlacement]=useState("4");
+
+  var P=parseFloat(prix)||0;
+  var Ap=parseFloat(apport)||0;
+  var capital=P-Ap;
+  var tauxAn=parseFloat(taux)||3.5;
+  var n=(parseFloat(duree)||20)*12;
+  var fn=parseFloat(fraisNotaire)||7.5;
+  var chAn=parseFloat(chargesAchat)||0;
+  var appAn=parseFloat(appreciation)||2;
+  var loyerM=parseFloat(loyer)||0;
+  var chLocM=parseFloat(chargesLoc)||0;
+  var revLoc=parseFloat(revaloLoc)||1.5;
+  var DA=parseFloat(dureeAnalyse)||20;
+  var rend=parseFloat(rendPlacement)||4;
+
+  var r=tauxAn/100/12;
+  var mensualite=capital>0&&r>0?capital*r/(1-Math.pow(1+r,-n)):capital>0?capital/n:0;
+  var fraisNotaireEur=P*fn/100;
+  var revente=P*Math.pow(1+appAn/100,DA);
+  var coutAchat=(mensualite*12*DA)+fraisNotaireEur+(chAn*DA)-revente+Ap;
+
+  var coutLoc=0;
+  var loyerCourant=loyerM;
+  var chLocCourant=chLocM;
+  for(var yy=0;yy<DA;yy++){
+    coutLoc+=loyerCourant*12+chLocCourant*12;
+    loyerCourant=loyerCourant*(1+revLoc/100);
+    chLocCourant=chLocCourant*(1+revLoc/100);
+  }
+  var rendPlacementTotal=Ap*(Math.pow(1+rend/100,DA)-1);
+  var coutLocNet=coutLoc-rendPlacementTotal;
+
+  var pointMort=-1;
+  var cumAchat=fraisNotaireEur+Ap;
+  var cumLoc=0;
+  var loyerPM=loyerM;
+  var chLocPM=chLocM;
+  var rendApport=Ap;
+  for(var y=1;y<=Math.min(DA,50);y++){
+    cumAchat+=mensualite*12+chAn-P*Math.pow(1+appAn/100,y)+P*Math.pow(1+appAn/100,y-1);
+    cumLoc+=loyerPM*12+chLocPM*12;
+    rendApport*=(1+rend/100);
+    loyerPM*=(1+revLoc/100);
+    chLocPM*=(1+revLoc/100);
+    if(pointMort<0&&cumAchat<cumLoc-(rendApport-Ap)){pointMort=y;}
+  }
+
+  var achatGagne=coutAchat<coutLocNet;
+  var optBox=function(title,val,best){
+    return el("div",{style:{flex:1,minWidth:140,background:best?"#19A97912":"var(--surface-2)",borderRadius:14,padding:14,border:best?"1.5px solid #19A979":"1.5px solid var(--border)"}},
+      el("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},
+        el("span",{style:{fontSize:12.5,fontWeight:700,color:"var(--text-2)"}},title),
+        best?el("span",{style:{fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:12,background:"#19A979",color:"#fff"}},"MOINS CHER"):null),
+      el("div",{style:{fontSize:22,fontWeight:800,color:best?"#19A979":"var(--text)"}},P>0?fmt(val):"—"));
+  };
+  var row=function(lbl,val,unit){
+    return el("div",{style:{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}},
+      el("span",{style:{color:"var(--text-3)"}}),
+      el("span",{style:{fontWeight:600}}));
+  };
+  void row;
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Achat vs Location immobilier"),
+    el("div",{style:S.section},
+      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Achat"),
+      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Prix du bien (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:prix,placeholder:"ex : 300000",onChange:function(e){setPrix(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Apport (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:apport,placeholder:"ex : 60000",onChange:function(e){setApport(e.target.value);}}))),
+      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Taux prêt (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée prêt (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:duree,onChange:function(e){setDuree(e.target.value);}}))),
+      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Frais notaire (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:fraisNotaire,onChange:function(e){setFraisNotaire(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges/taxe (€/an)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesAchat,onChange:function(e){setChargesAchat(e.target.value);}}))),
+      el("div",{style:{flex:1,marginBottom:0}},el("label",{style:S.fieldLabel},"Appréciation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:appreciation,onChange:function(e){setAppreciation(e.target.value);}})),
+      capital>0&&el("div",{style:{marginTop:8,fontSize:13,color:"var(--text-3)"}},"Mensualité estimée : ",el("strong",null,fmt(mensualite))," / mois — Frais notaire : ",el("strong",null,fmt(fraisNotaireEur)))),
+    el("div",{style:S.section},
+      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Location"),
+      el("div",{style:{display:"flex",gap:10,marginBottom:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Loyer mensuel (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:loyer,placeholder:"ex : 1200",onChange:function(e){setLoyer(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Charges loc. (€/mois)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:chargesLoc,onChange:function(e){setChargesLoc(e.target.value);}}))),
+      el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Revalorisation annuelle (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:revaloLoc,onChange:function(e){setRevaloLoc(e.target.value);}}))),
+    el("div",{style:S.section},
+      el("div",{style:{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--text-2)"}},"Paramètres communs"),
+      el("div",{style:{display:"flex",gap:10}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée d'analyse (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:dureeAnalyse,onChange:function(e){setDureeAnalyse(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Rendement placement apport (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:rendPlacement,onChange:function(e){setRendPlacement(e.target.value);}})))),
+    P>0&&loyerM>0&&el("div",{style:S.section},
+      el("div",{style:{fontWeight:700,fontSize:15,marginBottom:12}},"Résultat sur "+DA+" ans"),
+      el("div",{style:{display:"flex",gap:12,marginBottom:12}},
+        optBox("Coût net achat",coutAchat,achatGagne),
+        optBox("Coût net location",coutLocNet,!achatGagne)),
+      pointMort>0&&el("div",{style:{fontSize:13,color:"var(--text-3)",marginBottom:8}},
+        "Point mort estimé : ",el("strong",{style:{color:"#19A979"}},pointMort+" ans")," (l'achat devient moins cher)"),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:0}},"Hors inflation, hypothèses simplifiées. Coût net achat = mensualités + frais notaire + charges − valeur revente. Coût net location = loyers + charges − rendement sur l'apport placé.")));
+}
+
+// ---- Simulateur : PER — déduction fiscale ----
+function PerSimulator({onBack}){
+  const [revenu,setRevenu]=useState("");
+  const [tmi,setTmi]=useState(30);
+  const [versement,setVersement]=useState("");
+  const [dureeRetraite,setDureeRetraite]=useState("30");
+  const [rendPer,setRendPer]=useState("4.5");
+
+  var R=parseFloat(revenu)||0;
+  var V=parseFloat(versement)||0;
+  var DR=parseFloat(dureeRetraite)||30;
+  var rend=parseFloat(rendPer)||4.5;
+
+  var plafond=Math.max(R*0.10,4114);
+  var depassePlafond=V>plafond;
+  var versementEffectif=Math.min(V,plafond);
+  var economieFiscale=versementEffectif*tmi/100;
+  var coutNet=V-economieFiscale;
+
+  function calcCapital(dureeAns){
+    return compoundFV(0,versementEffectif/12,rend,dureeAns*12);
+  }
+
+  var capRetraite=calcCapital(DR);
+  var cap10=calcCapital(10);
+  var cap20=calcCapital(20);
+
+  var tmiRetraite=tmi*0.7;
+  var fiscaliteSortie=capRetraite*(tmiRetraite/100);
+
+  var optBox=function(titre,val,color){
+    return el("div",{style:{flex:1,minWidth:100,background:"var(--surface-2)",borderRadius:14,padding:12,border:"1.5px solid var(--border)",textAlign:"center"}},
+      el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginBottom:4}},titre),
+      el("div",{style:{fontSize:18,fontWeight:800,color:color||"var(--text)"}},fmt(val)));
+  };
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"PER — déduction fiscale"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Revenu net imposable (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:revenu,placeholder:"ex : 45000",onChange:function(e){setRevenu(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"TMI"),
+      el("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:0}},
+        [0,11,30,41,45].map(function(t){
+          var on=tmi===t;
+          return el("button",{key:t,onClick:function(){setTmi(t);},
+            style:{padding:"8px 14px",borderRadius:10,border:on?"2px solid #945ECF":"2px solid var(--border)",background:on?"#945ECF14":"var(--surface-2)",color:on?"#945ECF":"var(--text-3)",fontWeight:on?700:500,fontSize:13.5,cursor:"pointer"}},t+"%");
+        })),
+      el("div",{style:{display:"flex",gap:10,marginTop:14}},
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Versement annuel PER (€)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:versement,placeholder:"ex : 5000",onChange:function(e){setVersement(e.target.value);}})),
+        el("div",{style:{flex:1}},el("label",{style:S.fieldLabel},"Durée jusqu'à la retraite (ans)"),el("input",{type:"number",inputMode:"numeric",style:S.input,value:dureeRetraite,onChange:function(e){setDureeRetraite(e.target.value);}}))),
+      el("div",{style:{marginTop:10}},el("label",{style:S.fieldLabel},"Rendement du PER (%)"),el("input",{type:"number",inputMode:"decimal",style:S.input,value:rendPer,onChange:function(e){setRendPer(e.target.value);}})),
+      depassePlafond&&el("div",{style:{marginTop:10,padding:"8px 12px",borderRadius:10,background:"#E8743B14",border:"1.5px solid #E8743B44",fontSize:12.5,color:"#E8743B"}},
+        "Plafond de déduction : ",el("strong",null,fmt(plafond))," — Le versement excédentaire ("+fmt(V-plafond)+") n'est pas déductible.")),
+    V>0&&el("div",{style:S.section},
+      el("div",{style:{textAlign:"center",marginBottom:14}},
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginBottom:4}},"Économie d'impôt cette année"),
+        el("div",{style:{fontSize:32,fontWeight:800,color:"#19A979"}},fmt(economieFiscale)),
+        el("div",{style:{fontSize:13,color:"var(--text-3)",marginTop:4}},"Coût net réel : ",el("strong",null,fmt(coutNet))," / an")),
+      el("div",{style:{display:"flex",gap:10,marginBottom:14}},
+        optBox("Capital 10 ans",cap10,"#945ECF"),
+        optBox("Capital 20 ans",cap20,"#945ECF"),
+        optBox("Capital "+DR+" ans",capRetraite,"#945ECF")),
+      el("div",{style:{overflowX:"auto"}},
+        el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},
+          el("thead",null,
+            el("tr",null,
+              el("th",{style:{textAlign:"left",padding:"6px 4px",color:"var(--text-3)",fontWeight:600}},"Horizon"),
+              el("th",{style:{textAlign:"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:600}},"Capital"),
+              el("th",{style:{textAlign:"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:600}},"Versements cumulés"),
+              el("th",{style:{textAlign:"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:600}},"Gains"))),
+          el("tbody",null,
+            [10,20,DR].filter(function(d,i,a){return a.indexOf(d)===i;}).map(function(d){
+              var cap=calcCapital(d);
+              var verses=versementEffectif*d;
+              return el("tr",{key:d,style:{borderTop:"1px solid var(--border)"}},
+                el("td",{style:{padding:"6px 4px"}},d+" ans"),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",fontWeight:700,color:"#945ECF"}},fmt(cap)),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-3)"}},fmt(verses)),
+                el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#19A979"}},fmt(cap-verses)));
+            })))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",margin:0}},"Fiscalité à la sortie estimée (TMI retraite ≈ "+Math.round(tmiRetraite)+"%) : ",el("strong",null,fmt(fiscaliteSortie)),". Hypothèses simplifiées, hors cotisations sociales.")));
+}
+
 function OutilsScreen(props){
   const [view,setView]=useState("menu");
   var back=function(){setView("menu");};
@@ -2478,6 +2707,8 @@ function OutilsScreen(props){
   if(view==="achatloc") return el(AchatLocSimulator,{onBack:back});
   if(view==="compose") return el(CompoundInterestSimulator,{onBack:back});
   if(view==="projection") return el(ProjectionSimulator,{onBack:back,startCapital:startCapital});
+  if(view==="immo") return el(ImmoSimulator,{onBack:back});
+  if(view==="per") return el(PerSimulator,{onBack:back});
   var cards=[
     {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton impôt 2025 (revenus 2024)"},
     {id:"pret",icon:"car",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût, capacité d'emprunt"},
@@ -2487,6 +2718,8 @@ function OutilsScreen(props){
     {id:"achatloc",icon:"git-compare",color:"#F2B53C",title:"Achat vs Location",sub:"Voiture : LLD/LOA ou achat"},
     {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Actifs − passifs = patrimoine net"},
     {id:"echeancier",icon:"calendar",color:"#E8743B",title:"Échéancier fiscal",sub:"Suivi des échéances de l'année"},
+    {id:"immo",icon:"house",color:"#19A979",title:"Achat vs Location immo",sub:"Calcule le point mort et le coût réel"},
+    {id:"per",icon:"briefcase",color:"#945ECF",title:"PER — déduction fiscale",sub:"Économie d'impôt et capital retraite"},
   ];
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Outils"),
