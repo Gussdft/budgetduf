@@ -132,12 +132,15 @@ const THEME_ICON = {auto:"contrast",clair:"sun",sombre:"moon"};
 const SETTINGS_KEY = "budget-foyer-settings";
 const PATRIMOINE_KEY = "budget-foyer-patrimoine";
 const ECHEANCES_KEY = "budget-foyer-echeances";
+const SNAPSHOT_KEY = "budget-foyer-snapshot";
 
 function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
 function saveData(d){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){console.error(e);} }
 function loadTheme(){ try{ return localStorage.getItem(THEME_KEY)||"auto"; }catch(e){ return "auto"; } }
 function loadSettings(){ try{ var r=localStorage.getItem(SETTINGS_KEY); return r?JSON.parse(r):{}; }catch(e){ return {}; } }
 function saveSettings(s){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }catch(e){ console.error(e); } }
+function saveSnapshot(months){ try{ localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({months:months,ts:Date.now()})); }catch(e){} }
+function loadSnapshot(){ try{ var r=localStorage.getItem(SNAPSHOT_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
 
 const blankMonth = () => ({
   revenus: PRESET.revenus.map(l=>({id:uid(),label:l,amount:0})),
@@ -560,6 +563,22 @@ function App(){
   const syncTimer = useRef(null);
   const lastSyncRef = useRef(0);
   const syncingRef = useRef(false);
+  const [undoToast, setUndoToast] = useState(null); // {label, months}
+  const undoTimer = useRef(null);
+
+  const withSnapshot = function(label, action) {
+    saveSnapshot(months);
+    setUndoToast({label:label, months:months});
+    if(undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(function(){ setUndoToast(null); }, 10000);
+    action();
+  };
+  const doUndo = function() {
+    if(!undoToast) return;
+    setMonths(undoToast.months);
+    setUndoToast(null);
+    if(undoTimer.current) clearTimeout(undoTimer.current);
+  };
 
   useEffect(()=>{ const d=loadData(); if(d){ setMonths(d.months||{}); setPots(d.pots||[]); setProjects(d.projects||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); },[]);
   useEffect(function(){
@@ -740,15 +759,15 @@ function App(){
       el("div",{style:S.actionRow},
         el("button",{style:S.copyBtn,onClick:function(){
           var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
-          if(hasData){setModal({kind:"confirmaction",title:"Recopier le mois précédent",message:"Cela va remplacer les lignes du mois en cours. Continue ?",onConfirm:copyPrev});}
+          if(hasData){setModal({kind:"confirmaction",title:"Recopier le mois précédent",message:"Cela va remplacer les lignes du mois en cours. Continue ?",onConfirm:function(){withSnapshot("Mois précédent annulé",copyPrev);}});}
           else{copyPrev();}
         }},el(Icon,{name:"rotate-ccw",size:14})," Mois précédent"),
         el("button",{style:Object.assign({},S.copyBtn,{color:"#945ECF",borderColor:"#945ECF44",background:"#945ECF10"}),onClick:function(){
           var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
-          if(hasData){setModal({kind:"confirmaction",title:"Pré-remplir avec la moyenne",message:"Cela va remplacer les lignes du mois en cours par les moyennes des 3 derniers mois. Continue ?",onConfirm:fillAverage});}
+          if(hasData){setModal({kind:"confirmaction",title:"Pré-remplir avec la moyenne",message:"Cela va remplacer les lignes du mois en cours par les moyennes des 3 derniers mois. Continue ?",onConfirm:function(){withSnapshot("Moyenne annulée",fillAverage);}});}
           else{fillAverage();}
         }},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
-        el("button",{style:S.resetBtn,onClick:function(){setModal({kind:"confirmaction",title:"Réinitialiser le mois",message:"Supprimer toutes les lignes et versements de ce mois ?",onConfirm:resetMonth});}},
+        el("button",{style:S.resetBtn,onClick:function(){setModal({kind:"confirmaction",title:"Réinitialiser le mois",message:"Supprimer toutes les lignes et versements de ce mois ?",onConfirm:function(){withSnapshot("Réinitialisation annulée",resetMonth);}});}},
           "Réinitialiser")),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
@@ -814,7 +833,14 @@ function App(){
     (modal&&modal.kind==="confirmaction") && el(ConfirmModal,{
       title:modal.title,message:modal.message,
       onClose:()=>setModal(null),
-      onConfirm:function(){modal.onConfirm();setModal(null);}})
+      onConfirm:function(){modal.onConfirm();setModal(null);}}),
+
+    // ---- Toast Annuler ----
+    undoToast && el("div",{style:{position:"fixed",left:16,right:16,bottom:"calc(88px + env(safe-area-inset-bottom))",zIndex:200,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"#1c1c1e",color:"#fff",borderRadius:16,padding:"13px 16px",boxShadow:"0 8px 24px rgba(0,0,0,.35)",animation:"slideUp .25s ease"}},
+      el("span",{style:{fontSize:13.5,fontWeight:600}},undoToast.label||"Action effectuée"),
+      el("div",{style:{display:"flex",gap:8}},
+        el("button",{onClick:doUndo,style:{border:"none",borderRadius:10,padding:"8px 16px",fontWeight:800,fontSize:13.5,cursor:"pointer",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff"}},"↩ Annuler"),
+        el("button",{onClick:function(){setUndoToast(null);if(undoTimer.current)clearTimeout(undoTimer.current);},style:{border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:13,cursor:"pointer",background:"transparent",color:"#8a94a6"}},"OK")))
   );
 }
 
