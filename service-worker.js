@@ -1,5 +1,5 @@
 // Service worker — cache l'app pour un usage hors-ligne
-const CACHE = "budget-foyer-v21";
+const CACHE = "budget-foyer-v23";
 const ASSETS = [
   "./",
   "./index.html",
