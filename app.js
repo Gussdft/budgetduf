@@ -43,6 +43,9 @@ const PATHS = {
   "scale":'<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
   "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   "home": '<path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
+  "lock":'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  "unlock":'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+  "briefcase":'<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
 };
 function Icon({ name, size = 16, color = "currentColor", style }) {
   return el("span", { style: { display: "inline-flex", ...style },
@@ -299,11 +302,13 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
 
 function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,year,month,setModal,delDeposit,projects,projectBalance,annualReturn,advisorMode,setAdvisorMode,setAnnualReturn,profile,avgMonthlyExpenses,editProject}){
   var [view,setView]=useState("cagnottes");
-  var segStyle=function(v){return {flex:1,padding:"8px 0",borderRadius:10,border:"none",background:view===v?"var(--glass-bg-strong)":"transparent",color:view===v?"var(--text)":"var(--text-3)",fontWeight:view===v?700:500,fontSize:14,cursor:"pointer",boxShadow:view===v?"0 1px 6px rgba(0,0,0,.1)":"none",transition:"all .2s"};};
+  var segStyle=function(v){return {flex:1,padding:"8px 0",borderRadius:10,border:"none",background:view===v?"var(--glass-bg-strong)":"transparent",color:view===v?"var(--text)":"var(--text-3)",fontWeight:view===v?700:500,fontSize:13.5,cursor:"pointer",boxShadow:view===v?"0 1px 6px rgba(0,0,0,.1)":"none",transition:"all .2s"};};
   return el(React.Fragment,null,
     el("div",{style:{display:"flex",background:"var(--glass-bg)",borderRadius:14,padding:3,marginBottom:4,border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)"}},
       el("button",{style:segStyle("cagnottes"),onClick:function(){setView("cagnottes");}},"Cagnottes"),
-      el("button",{style:segStyle("projets"),onClick:function(){setView("projets");}},"Projets")),
+      el("button",{style:segStyle("projets"),onClick:function(){setView("projets");}},"Projets"),
+      el("button",{style:segStyle("placements"),onClick:function(){setView("placements");}},"Placements")),
+    view==="placements"&&el(PlacementsPanel,null),
     view==="cagnottes"&&el(React.Fragment,null,
       el(PatrimoineCard,{pots:pots,potBalance:potBalance,avgMonthly:avgMonthlySavings(),thisMonthSaved:totalSaved}),
       el("div",{style:S.section},
@@ -363,6 +368,173 @@ function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,
             onDelete:function(){setModal({kind:"confirmdelproj",projId:proj.id,projLabel:proj.label});},
             onContribution:function(v){editProject(proj.id,{monthlyContribution:v});}});
         })))));
+}
+
+// ----- Placements (épargne salariale) : helpers de déblocage -----
+function addYears(dateStr,years){ var p=(dateStr||"").split("-"); if(p.length!==3) return null; var d=new Date(parseInt(p[0],10)+years,parseInt(p[1],10)-1,parseInt(p[2],10)); return d; }
+function fmtDateFr(d){ if(!d) return ""; return d.getDate()+" "+MONTHS_FR[d.getMonth()]+" "+d.getFullYear(); }
+function monthsBetween(from,to){
+  var y=to.getFullYear()-from.getFullYear();
+  var m=to.getMonth()-from.getMonth();
+  var total=y*12+m;
+  if(to.getDate()<from.getDate()) total-=1;
+  return total;
+}
+function countdownTxt(months){
+  if(months<=0) return "";
+  var y=Math.floor(months/12), mo=months%12;
+  var parts=[];
+  if(y>0) parts.push(y+" an"+(y>1?"s":""));
+  if(mo>0) parts.push(mo+" mois");
+  if(parts.length===0) parts.push("moins d'un mois");
+  return parts.join(" ");
+}
+// Calcule l'état de déblocage d'un placement -> {status:"locked"|"unlocked"|"retraite"|"plan", date, label, color}
+function placementDeblocage(p){
+  var cfg=PLACEMENT_TYPES[p.type]||PLACEMENT_TYPES.pee;
+  var today=new Date(); today.setHours(0,0,0,0);
+  if(cfg.lock==="retraite"){
+    if(p.dateRetraite){
+      var dr=addYears(p.dateRetraite,0);
+      if(dr){ dr.setHours(0,0,0,0);
+        if(dr<=today) return {status:"unlocked",date:dr,label:"Disponible (retraite atteinte) depuis le "+fmtDateFr(dr),color:"#19A979"};
+        var mr=monthsBetween(today,dr);
+        return {status:"retraite",date:dr,label:"Débloqué à la retraite — le "+fmtDateFr(dr),sub:"dans "+countdownTxt(mr),color:"#E8743B"};
+      }
+    }
+    return {status:"retraite",date:null,label:"Débloqué à la retraite",sub:"renseigne ta date de départ estimée",color:"#E8743B"};
+  }
+  // pee / pei / peg / actionnariat : 5 ans depuis le versement
+  if(p.dateVersement){
+    var dd=addYears(p.dateVersement,5);
+    if(dd){ dd.setHours(0,0,0,0);
+      if(dd<=today) return {status:"unlocked",date:dd,label:"Débloqué ✓ depuis le "+fmtDateFr(dd),color:"#19A979"};
+      var mm=monthsBetween(today,dd);
+      return {status:"locked",date:dd,label:"Débloquable le "+fmtDateFr(dd),sub:"dans "+countdownTxt(mm),color:"#E8743B"};
+    }
+  }
+  return {status:"locked",date:null,label:cfg.lock==="plan"?"Selon conditions du plan":"Bloqué 5 ans",sub:"renseigne la date de versement",color:"#E8743B"};
+}
+
+function PlacementCard({p,onEdit,onDelete}){
+  var [showCond,setShowCond]=useState(false);
+  var cfg=PLACEMENT_TYPES[p.type]||PLACEMENT_TYPES.pee;
+  var deb=placementDeblocage(p);
+  var conds=DEBLOCAGE_ANTICIPE[cfg.cond]||DEBLOCAGE_ANTICIPE.pee;
+  var ab=p.abondement||0;
+  return el("div",{style:S.potCard},
+    el("div",{style:S.potTop},
+      el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
+        el(Icon,{name:"briefcase",size:16,color:cfg.color}),
+        el("strong",{style:{fontSize:14}},p.label||cfg.label),
+        el("span",{style:{fontSize:10,fontWeight:700,background:cfg.color+"22",color:cfg.color,borderRadius:6,padding:"2px 7px"}},cfg.badge)),
+      el("div",{style:{display:"flex",gap:4,marginLeft:"auto"}},
+        el("button",{style:S.delBtn,title:"Modifier",onClick:onEdit},el(Icon,{name:"edit-2",size:13})),
+        el("button",{style:Object.assign({},S.delBtn,{color:"#C8516C"}),title:"Supprimer",onClick:onDelete},el(Icon,{name:"trash-2",size:13})))),
+    p.organisme&&el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:-2,marginBottom:2}},p.organisme),
+    el("div",{style:S.potBalRow},el("span",{style:{fontSize:24,fontWeight:800,color:cfg.color,letterSpacing:"-0.5px"}},fmt(p.montant||0))),
+    ab>0&&el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:2}},"dont "+fmt(ab)+" d'abondement employeur"),
+    // bloc déblocage
+    el("div",{style:{display:"flex",alignItems:"flex-start",gap:9,marginTop:12,padding:"10px 12px",borderRadius:12,background:deb.color+"14",border:"1px solid "+deb.color+"30"}},
+      el(Icon,{name:deb.status==="unlocked"?"unlock":"lock",size:16,color:deb.color,style:{marginTop:1}}),
+      el("div",{style:{flex:1,minWidth:0}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:deb.color}},deb.label),
+        deb.sub&&el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:2}},deb.sub))),
+    // cas de déblocage anticipé (repliable)
+    el("button",{onClick:function(){setShowCond(!showCond);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:"transparent",cursor:"pointer",padding:"10px 0 0",color:"var(--text-2)"}},
+      el("span",{style:{display:"flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:600}},el(Icon,{name:"unlock",size:13,color:"var(--text-3)"}),"Cas de déblocage anticipé"),
+      el(Icon,{name:showCond?"chevron-down":"chevron-right",size:16,color:"var(--text-3)"})),
+    showCond&&el("ul",{style:{margin:"8px 0 0",paddingLeft:18,fontSize:12,color:"var(--text-2)",lineHeight:1.6}},
+      conds.map(function(c,i){return el("li",{key:i,style:{marginBottom:3}},c);})));
+}
+
+function PlacementForm({initial,onSave,onCancel}){
+  var [label,setLabel]=useState(initial&&initial.label?initial.label:"");
+  var [organisme,setOrganisme]=useState(initial&&initial.organisme?initial.organisme:"");
+  var [type,setType]=useState(initial&&initial.type?initial.type:"pee");
+  var [montant,setMontant]=useState(initial&&typeof initial.montant==="number"?String(initial.montant):"");
+  var [abondement,setAbondement]=useState(initial&&typeof initial.abondement==="number"&&initial.abondement?String(initial.abondement):"");
+  var [dateVersement,setDateVersement]=useState(initial&&initial.dateVersement?initial.dateVersement:"");
+  var [dateRetraite,setDateRetraite]=useState(initial&&initial.dateRetraite?initial.dateRetraite:"");
+  var cfg=PLACEMENT_TYPES[type]||PLACEMENT_TYPES.pee;
+  var isRetraite=cfg.lock==="retraite";
+  function submit(){
+    onSave({
+      id:initial&&initial.id?initial.id:uid(),
+      label:label.trim()||cfg.label,
+      organisme:organisme.trim(),
+      type:type,
+      montant:parseFloat(montant)||0,
+      abondement:parseFloat(abondement)||0,
+      dateVersement:dateVersement||"",
+      dateRetraite:dateRetraite||""
+    });
+  }
+  var dateInputStyle={width:"100%",padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border-3)",fontSize:15,outline:"none",background:"var(--field-bg)",boxSizing:"border-box",color:"var(--text)"};
+  return el("div",{style:Object.assign({},S.section,{border:"1px solid "+cfg.color+"40"})},
+    el("div",{style:Object.assign({},S.sectionTitle,{marginBottom:12})},el(Icon,{name:"briefcase",size:16,color:cfg.color}),initial?"Modifier le placement":"Nouveau placement"),
+    el("label",{style:S.fieldLabel},"Nom du plan"),
+    el("input",{style:S.input,value:label,placeholder:"ex : PEE Amundi 2024",onChange:function(e){setLabel(e.target.value);}}),
+    el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Organisme"),
+    el("input",{style:S.input,value:organisme,placeholder:"ex : Amundi, Natixis…",onChange:function(e){setOrganisme(e.target.value);}}),
+    el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Type de plan"),
+    el("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
+      PLACEMENT_TYPE_ORDER.map(function(t){
+        var c=PLACEMENT_TYPES[t]; var on=type===t;
+        return el("button",{key:t,onClick:function(){setType(t);},
+          style:{padding:"8px 12px",borderRadius:10,border:"1.5px solid "+(on?c.color:"var(--border-3)"),background:on?c.color+"18":"var(--field-bg)",color:on?c.color:"var(--text-2)",fontWeight:on?700:500,fontSize:13,cursor:"pointer"}},c.label);
+      })),
+    el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:8,lineHeight:1.5}},cfg.hint),
+    el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Valeur actuelle (€)"),
+    el("input",{type:"number",inputMode:"decimal",style:S.input,value:montant,placeholder:"ex : 8500",onChange:function(e){setMontant(e.target.value);}}),
+    el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Abondement employeur cumulé (€, optionnel)"),
+    el("input",{type:"number",inputMode:"decimal",style:S.input,value:abondement,placeholder:"ex : 1200",onChange:function(e){setAbondement(e.target.value);}}),
+    el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},isRetraite?"Date du versement (optionnel)":"Date du versement"),
+    el("input",{type:"date",style:dateInputStyle,value:dateVersement,onChange:function(e){setDateVersement(e.target.value);}}),
+    el("div",{style:{fontSize:11,color:"var(--text-4)",marginTop:4}},isRetraite?"Indicatif (le PER se débloque à la retraite)":"Sert à calculer le déblocage à 5 ans"),
+    isRetraite&&el(React.Fragment,null,
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:12})},"Date de départ en retraite estimée"),
+      el("input",{type:"date",style:dateInputStyle,value:dateRetraite,onChange:function(e){setDateRetraite(e.target.value);}})),
+    el("div",{style:{display:"flex",gap:10,marginTop:16}},
+      el("button",{onClick:onCancel,style:{flex:1,padding:12,borderRadius:12,border:"1px solid var(--border-3)",background:"var(--glass-bg)",color:"var(--text-2)",fontSize:14,fontWeight:600,cursor:"pointer"}},"Annuler"),
+      el("button",{onClick:submit,style:Object.assign({},S.saveBtn,{flex:2,marginTop:0})},initial?"Enregistrer":"Ajouter")));
+}
+
+function PlacementsPanel(){
+  var [list,setList]=useState(loadPlacements);
+  var [form,setForm]=useState(null); // null | {mode:"new"} | {mode:"edit",placement}
+  useEffect(function(){ savePlacements(list); },[list]);
+  var total=list.reduce(function(s,p){return s+(p.montant||0);},0);
+  var totalAb=list.reduce(function(s,p){return s+(p.abondement||0);},0);
+  function saveOne(pl){
+    setList(function(prev){
+      var found=false;
+      var next=prev.map(function(x){ if(x.id===pl.id){found=true;return pl;} return x; });
+      if(!found) next=next.concat([pl]);
+      return next;
+    });
+    setForm(null);
+  }
+  return el(React.Fragment,null,
+    el("div",{style:Object.assign({},S.section,{background:"#1D8BCE10",border:"1px solid #1D8BCE30"})},
+      el("div",{style:{display:"flex",alignItems:"flex-start",gap:9}},
+        el(Icon,{name:"briefcase",size:18,color:"#1D8BCE",style:{marginTop:1}}),
+        el("p",{style:{margin:0,fontSize:12.5,color:"var(--text-2)",lineHeight:1.55}},
+          "L'épargne salariale (PEE, PER…) est bloquée mais défiscalisée. Le PEE se débloque après 5 ans (ou cas anticipés), le PER à la retraite. Renseigne tes plans pour suivre quand tu pourras récupérer cet argent."))),
+    el("div",{style:S.section},
+      el("div",{style:S.sectionHead},
+        el("span",{style:S.sectionTitle},el(Icon,{name:"briefcase",size:16,color:"#1D8BCE"})," Placements"),
+        el("button",{style:Object.assign({},S.smallBtn,{color:"#1D8BCE",background:"#1D8BCE14"}),onClick:function(){setForm({mode:"new"});}},el(Icon,{name:"plus",size:14,color:"#1D8BCE"})," Placement")),
+      list.length>0&&el("div",{style:{display:"flex",gap:12,marginBottom:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Total placements"),el("div",{style:Object.assign({},S.bilanVal,{color:"#1D8BCE"})},fmt(total))),
+        totalAb>0&&el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"dont abondement"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(totalAb)))),
+      (list.length===0&&!form)&&el("p",{style:S.blockHint},"Ajoute un plan d'épargne salariale (PEE, PER, PEG, PERCO, actionnariat…) pour suivre sa valeur et ses dates de déblocage."),
+      form&&el("div",{style:{marginBottom:14}},el(PlacementForm,{initial:form.mode==="edit"?form.placement:null,onSave:saveOne,onCancel:function(){setForm(null);}})),
+      el("div",{style:S.potList},list.map(function(p){
+        return el(PlacementCard,{key:p.id,p:p,
+          onEdit:function(){setForm({mode:"edit",placement:p});},
+          onDelete:function(){setList(function(prev){return prev.filter(function(x){return x.id!==p.id;});});}});
+      }))));
 }
 
 // ----------------------------------------------------------------------------
@@ -1380,6 +1552,47 @@ function defaultEcheances(){
   ];
 }
 
+// ----- Placements (épargne salariale) -----
+const PLACEMENTS_KEY = "budget-foyer-placements";
+function loadPlacements(){ try{ var r=localStorage.getItem(PLACEMENTS_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+function savePlacements(list){ try{ localStorage.setItem(PLACEMENTS_KEY, JSON.stringify(list)); }catch(e){ console.error(e); } }
+
+const PLACEMENT_TYPES = {
+  pee:         {label:"PEE",                badge:"PEE",          color:"#1D8BCE", lock:"5ans",      cond:"pee",  hint:"Plan d'Épargne Entreprise — bloqué 5 ans par versement"},
+  pei:         {label:"PEI",                badge:"PEI",          color:"#19A979", lock:"5ans",      cond:"pee",  hint:"Plan d'Épargne Interentreprises — bloqué 5 ans par versement"},
+  peg:         {label:"PEG (groupe)",       badge:"PEG",          color:"#F2B53C", lock:"5ans",      cond:"pee",  hint:"Plan d'Épargne Groupe — bloqué 5 ans par versement"},
+  per:         {label:"PER",                badge:"PER",          color:"#945ECF", lock:"retraite",  cond:"per",  hint:"Plan d'Épargne Retraite — bloqué jusqu'à la retraite"},
+  percol:      {label:"PERCO/PERECO",       badge:"PERCOL",       color:"#E8743B", lock:"retraite",  cond:"per",  hint:"Plan d'Épargne Retraite Collectif — bloqué jusqu'à la retraite"},
+  actionnariat:{label:"Actionnariat salarié",badge:"Actions",     color:"#C8516C", lock:"plan",      cond:"pee",  hint:"Actionnariat salarié — blocage selon les conditions du plan (5 ans typiques)"},
+};
+const PLACEMENT_TYPE_ORDER = ["pee","pei","peg","per","percol","actionnariat"];
+
+const DEBLOCAGE_ANTICIPE = {
+  pee:[
+    "Mariage ou conclusion d'un PACS",
+    "Naissance ou adoption d'un 3e enfant (et suivants)",
+    "Divorce, séparation, dissolution de PACS avec garde d'au moins un enfant",
+    "Invalidité (salarié, conjoint, enfant)",
+    "Décès (salarié ou conjoint/partenaire)",
+    "Rupture du contrat de travail (licenciement, démission, retraite)",
+    "Création ou reprise d'entreprise",
+    "Acquisition ou agrandissement de la résidence principale",
+    "Surendettement",
+    "Violences conjugales",
+  ],
+  per:[
+    "Acquisition de la résidence principale (sauf compartiment obligatoire)",
+    "Invalidité (titulaire, enfants, conjoint/partenaire)",
+    "Décès du conjoint ou partenaire de PACS",
+    "Expiration des droits à l'assurance chômage",
+    "Surendettement",
+    "Cessation d'activité non salariée après liquidation judiciaire",
+  ],
+};
+
+// total des placements (épargne salariale) — utilisé comme actif dans le patrimoine
+function placementsTotal(){ return loadPlacements().reduce(function(s,p){return s+(p.montant||0);},0); }
+
 var TOOL_LINE = {display:"flex",alignItems:"center",gap:9,padding:"5px 0"};
 
 function ToolBack({onBack}){
@@ -1852,6 +2065,71 @@ function AchatLocSimulator({onBack}){
       el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"L'achat immobilise du capital ; la location préserve la trésorerie. Coût net = dépenses réelles − valeur résiduelle conservée.")));
 }
 
+// ---- Simulateur : Intérêts composés ----
+function compoundFV(capital,versement,annualRate,months){
+  var r=annualRate/100/12;
+  if(months<=0) return capital;
+  var growth=Math.pow(1+r,months);
+  if(r===0) return capital+versement*months;
+  return capital*growth+versement*((growth-1)/r);
+}
+function CompoundInterestSimulator({onBack}){
+  const [capital,setCapital]=useState("");
+  const [versement,setVersement]=useState("");
+  const [taux,setTaux]=useState("5");
+  const [duree,setDuree]=useState("20");
+
+  var C=parseFloat(capital)||0;
+  var V=parseFloat(versement)||0;
+  var tx=parseFloat(taux)||0;
+  var years=Math.round(parseFloat(duree)||0);
+  var n=years*12;
+  var fv=compoundFV(C,V,tx,n);
+  var verses=C+V*n;
+  var interets=fv-verses;
+
+  // tableau par tranche de 5 ans
+  var rows=[];
+  if(years>0){
+    for(var y=5;y<years;y+=5) rows.push(y);
+    rows.push(years);
+  }
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Intérêts composés"),
+    el("div",{style:S.section},
+      el("label",{style:S.fieldLabel},"Capital initial (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:capital,placeholder:"ex : 5000",onChange:function(e){setCapital(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Versement mensuel (€)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:versement,placeholder:"ex : 200",onChange:function(e){setVersement(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Rendement annuel (%)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:taux,onChange:function(e){setTaux(e.target.value);}}),
+      el("label",{style:Object.assign({},S.fieldLabel,{marginTop:14})},"Durée (années)"),
+      el("input",{type:"number",inputMode:"decimal",style:S.input,value:duree,onChange:function(e){setDuree(e.target.value);}})),
+    el("div",{style:S.section},
+      el("div",{style:S.fieldLabel},"Valeur finale estimée"),
+      bigNumber(fmt(fv),"#19A979"),
+      el("div",{style:{display:"flex",gap:12,marginTop:14,flexWrap:"wrap"}},
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Total versé"),el("div",{style:S.bilanVal},fmt(verses))),
+        el("div",{style:S.bilanStat},el("div",{style:S.bilanLabel},"Intérêts gagnés"),el("div",{style:Object.assign({},S.bilanVal,{color:"#19A979"})},fmt(interets)))),
+      rows.length>0&&el("div",{style:{marginTop:16,overflowX:"auto"}},
+        el("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5}},
+          el("thead",null,el("tr",null,
+            ["Année","Versé","Valeur","Intérêts"].map(function(h){return el("th",{key:h,style:{textAlign:h==="Année"?"left":"right",padding:"6px 4px",color:"var(--text-3)",fontWeight:700,borderBottom:"1px solid var(--border-2)"}},h);}))),
+          el("tbody",null,rows.map(function(yr){
+            var nn=yr*12;
+            var vFv=compoundFV(C,V,tx,nn);
+            var vVerses=C+V*nn;
+            return el("tr",{key:yr},
+              el("td",{style:{padding:"6px 4px",fontWeight:600}},yr+" ans"),
+              el("td",{style:{padding:"6px 4px",textAlign:"right",color:"var(--text-3)"}},fmt(vVerses)),
+              el("td",{style:{padding:"6px 4px",textAlign:"right",fontWeight:700}},fmt(vFv)),
+              el("td",{style:{padding:"6px 4px",textAlign:"right",color:"#19A979"}},fmt(vFv-vVerses)));
+          })))),
+      el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginTop:14,marginBottom:0}},"Intérêts capitalisés mensuellement. Hypothèse de rendement constant, hors inflation et fiscalité.")));
+}
+
 function OutilsScreen(){
   const [view,setView]=useState("menu");
   var back=function(){setView("menu");};
@@ -1861,9 +2139,11 @@ function OutilsScreen(){
   if(view==="echeancier") return el(EcheancierSimulator,{onBack:back});
   if(view==="pfu") return el(PfuSimulator,{onBack:back});
   if(view==="achatloc") return el(AchatLocSimulator,{onBack:back});
+  if(view==="compose") return el(CompoundInterestSimulator,{onBack:back});
   var cards=[
     {id:"ir",icon:"percent",color:"#C8516C",title:"Impôt sur le revenu",sub:"Estime ton impôt 2025 (revenus 2024)"},
     {id:"pret",icon:"car",color:"#1D8BCE",title:"Simulateur de prêt",sub:"Mensualité, coût, capacité d'emprunt"},
+    {id:"compose",icon:"trending-up",color:"#19A979",title:"Intérêts composés",sub:"Capital + versements → valeur future"},
     {id:"pfu",icon:"trending-up",color:"#945ECF",title:"Flat tax vs barème",sub:"Dividendes & plus-values"},
     {id:"achatloc",icon:"git-compare",color:"#F2B53C",title:"Achat vs Location",sub:"Voiture : LLD/LOA ou achat"},
     {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Actifs − passifs = patrimoine net"},
@@ -1885,6 +2165,29 @@ function OutilsScreen(){
 }
 
 // ----------------------------------------------------------------------------
+// ---- Grille de KPI (Accueil) ----
+function KpiGrid(props){
+  var cardStyle={background:"var(--glass-bg)",borderRadius:18,padding:"13px 14px",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)",boxShadow:"var(--glass-shadow)"};
+  var labelStyle={fontSize:11,color:"var(--text-3)",fontWeight:600,marginBottom:5};
+  var valStyle={fontSize:23,fontWeight:800,letterSpacing:"-0.5px",lineHeight:1.1};
+  var subStyle={fontSize:11,fontWeight:600,marginTop:4};
+  function kpi(label,value,valColor,sub,subColor){
+    return el("div",{style:cardStyle},
+      el("div",{style:labelStyle},label),
+      el("div",{style:Object.assign({},valStyle,{color:valColor})},value),
+      sub?el("div",{style:Object.assign({},subStyle,{color:subColor||"var(--text-3)"})},sub):null);
+  }
+  var epColor=props.savingsRate>=10?"#19A979":"#E8743B";
+  var precColor=props.precautionMonths>=3?"#19A979":"#E8743B";
+  var precTxt=props.monthlyExpenses>0?(props.precautionMonths.toFixed(1).replace(".",",")+" mois"):"—";
+  var resteColor=props.nonAffecte>0?"#19A979":props.nonAffecte<0?"#C8516C":"#6C8893";
+  return el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+    kpi("Taux d'épargne",props.savingsRate+" %",epColor,"ce mois","var(--text-3)"),
+    kpi("Patrimoine net",fmt(props.patrimoineNet),props.patrimoineNet>=0?"#19A979":"#C8516C","actifs − passifs","var(--text-3)"),
+    kpi("Épargne de précaution",precTxt,precColor,props.monthlyExpenses>0?(props.precautionMonths>=3?"confortable":"à renforcer"):"renseigne tes dépenses",precColor),
+    kpi("Reste à vivre",fmt(props.nonAffecte),resteColor,"non affecté ce mois","var(--text-3)"));
+}
+
 // ---- Tableau de bord ----
 function DashboardScreen(props){
   var totalRevenus=props.totalRevenus, totalFixed=props.totalFixed, totalVariable=props.totalVariable;
@@ -1913,8 +2216,11 @@ function DashboardScreen(props){
   var totalActifs = 0, totalPassifs = 0;
   if(patrimoine&&patrimoine.actifs) totalActifs=patrimoine.actifs.reduce(function(s,a){return s+actifVal(a);},0);
   if(patrimoine&&patrimoine.passifs) totalPassifs=patrimoine.passifs.reduce(function(s,p){return s+(p.montant||0);},0);
+  var totalPlacements = placementsTotal();
+  var totalCagnottes = (pots||[]).reduce(function(s,p){return s+potBalance(p.id);},0);
+  totalActifs = totalActifs + totalPlacements;
   var patrimoineNet = totalActifs-totalPassifs;
-  var hasPatrimoine = patrimoine&&((patrimoine.actifs&&patrimoine.actifs.length>0)||(patrimoine.passifs&&patrimoine.passifs.length>0));
+  var hasPatrimoine = (patrimoine&&((patrimoine.actifs&&patrimoine.actifs.length>0)||(patrimoine.passifs&&patrimoine.passifs.length>0)))||totalPlacements>0;
 
   // Echeances
   var echeancesData = loadEcheances();
@@ -1939,6 +2245,10 @@ function DashboardScreen(props){
     return Math.round((d-today)/86400000);
   }
 
+  // KPI Accueil
+  var kpiPatrimoineNet = totalActifs + totalCagnottes - totalPassifs;
+  var precautionMonths = totalDep>0 ? totalCagnottes/totalDep : 0;
+
   var cardStyle={background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"};
   var bigNumStyle={fontSize:32,fontWeight:800,letterSpacing:"-1px"};
   var subStyle={fontSize:12,color:"var(--text-3)",marginTop:4};
@@ -1947,6 +2257,9 @@ function DashboardScreen(props){
   var colLblStyle={fontSize:10.5,color:"var(--text-3)",marginTop:2};
 
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+
+    // --- Grille de KPI ---
+    el(KpiGrid,{savingsRate:savingsPct,patrimoineNet:kpiPatrimoineNet,precautionMonths:precautionMonths,monthlyExpenses:totalDep,nonAffecte:nonAffecte}),
 
     // --- Carte Mois en cours ---
     el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},
