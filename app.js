@@ -550,7 +550,11 @@ function App(){
   const [projects,setProjects] = useState([]);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
-  const [tab,setTab]           = useState("accueil");
+  const [tab,setTab]           = useState(function(){
+    // ouvrir Budget si on arrive via un lien quickadd
+    var p=new URLSearchParams(window.location.search);
+    return p.get("amount")?"budget":"accueil";
+  });
   const [theme,setTheme]       = useState(loadTheme());
   const [showPrevus,setShowPrevus] = useState(function(){ var s=loadSettings(); return s.showPrevus===true; });
   const [annualReturn,setAnnualReturn] = useState(3);
@@ -594,6 +598,18 @@ function App(){
   },[months,pots,projects,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
+  // Saisie rapide depuis iOS Raccourcis (?amount=XX&label=YY)
+  useEffect(function(){
+    if(!loaded) return;
+    var p=new URLSearchParams(window.location.search);
+    var amt=parseFloat(p.get("amount")||"");
+    var lbl=p.get("label")||"";
+    if(amt>0){
+      setModal({kind:"quickadd",amount:amt,label:lbl});
+      // nettoyer l'URL sans recharger la page
+      try{ window.history.replaceState({},"",window.location.pathname); }catch(e){}
+    }
+  },[loaded]);
   useEffect(function(){
     if(!db) return;
     db.auth.getSession().then(function(res){
@@ -834,6 +850,8 @@ function App(){
       title:modal.title,message:modal.message,
       onClose:()=>setModal(null),
       onConfirm:function(){modal.onConfirm();setModal(null);}}),
+
+    (modal&&modal.kind==="quickadd") && el(QuickAddModal,{amount:modal.amount,label:modal.label,onClose:function(){setModal(null);},onSave:function(kind,label,amount){addLine(kind,label);setAmount(kind,label,amount);setModal(null);},onSaveNew:function(kind,lbl,amt){setMonthData(function(c){return Object.assign({},c,{[kind]:c[kind].concat([{id:uid(),label:lbl,amount:amt}])});});setModal(null);}}),
 
     // ---- Toast Annuler ----
     undoToast && el("div",{style:{position:"fixed",left:16,right:16,bottom:"calc(88px + env(safe-area-inset-bottom))",zIndex:200,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"#1c1c1e",color:"#fff",borderRadius:16,padding:"13px 16px",boxShadow:"0 8px 24px rgba(0,0,0,.35)",animation:"slideUp .25s ease"}},
@@ -1546,6 +1564,38 @@ function ConfirmModal({title,message,onClose,onConfirm}){
     el("div",{style:{display:"flex",gap:10}},
       el("button",{style:{...S.saveBtn,background:"var(--surface-3)",color:"var(--text-2)",boxShadow:"none",flex:1},onClick:onClose},"Annuler"),
       el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44",flex:1},onClick:onConfirm},"Supprimer")));
+}
+
+// ---- Saisie rapide (depuis iOS Raccourcis) ----
+function QuickAddModal(props){
+  var initAmt=props.amount||0, initLbl=props.label||"";
+  var onClose=props.onClose, onSaveNew=props.onSaveNew;
+  var [label,setLabel]=useState(initLbl);
+  var [amount,setAmount]=useState(String(initAmt));
+  var [kind,setKind]=useState("variable");
+  var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Exceptionnelle","#945ECF"]];
+  function save(){
+    var amt=parseFloat(amount)||0;
+    if(!label.trim()||amt<=0) return;
+    onSaveNew(kind,label.trim(),amt);
+  }
+  return el(Modal,{title:"⚡ Saisie rapide",onClose:onClose},
+    el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,background:"var(--surface-2)",borderRadius:10,padding:"8px 12px"}},
+      "Dépense importée depuis ton Raccourci iOS — vérifie et catégorise."),
+    el("label",{style:S.fieldLabel},"Montant (€)"),
+    el("div",{style:Object.assign({},S.lineAmtWrap,{width:"100%",marginBottom:14,borderRadius:11,padding:"0 13px"})},
+      el("input",{type:"number",inputMode:"decimal",style:Object.assign({},S.lineAmtInput,{fontSize:22,fontWeight:800,padding:"12px 0"}),value:amount,onChange:function(e){setAmount(e.target.value);}}),
+      el("span",{style:Object.assign({},S.eur,{fontSize:16})},"€")),
+    el("label",{style:S.fieldLabel},"Libellé"),
+    el("input",{style:Object.assign({},S.input,{marginBottom:14}),value:label,placeholder:"ex : Carrefour",onChange:function(e){setLabel(e.target.value);}}),
+    el("label",{style:S.fieldLabel},"Catégorie"),
+    el("div",{style:{display:"flex",gap:8,marginBottom:20}},
+      cats.map(function(c){
+        var on=kind===c[0];
+        return el("button",{key:c[0],onClick:function(){setKind(c[0]);},
+          style:{flex:1,padding:"10px 4px",borderRadius:11,border:on?"1.5px solid "+c[2]:"1.5px solid var(--border)",background:on?c[2]+"18":"var(--field-bg)",color:on?c[2]:"var(--text-2)",fontWeight:on?800:600,fontSize:13,cursor:"pointer"}},c[1]);
+      })),
+    el("button",{style:S.saveBtn,onClick:save},"Ajouter la dépense"));
 }
 
 function Modal({title,children,onClose}){
