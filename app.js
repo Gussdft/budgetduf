@@ -738,9 +738,18 @@ function App(){
             el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes"))),
 
       el("div",{style:S.actionRow},
-        el("button",{style:S.copyBtn,onClick:copyPrev},el(Icon,{name:"rotate-ccw",size:14})," Mois précédent"),
-        el("button",{style:Object.assign({},S.copyBtn,{color:"#945ECF",borderColor:"#945ECF44",background:"#945ECF10"}),onClick:fillAverage},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
-        el("button",{style:S.resetBtn,onClick:resetMonth},"Réinitialiser")),
+        el("button",{style:S.copyBtn,onClick:function(){
+          var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
+          if(hasData){setModal({kind:"confirmaction",title:"Recopier le mois précédent",message:"Cela va remplacer les lignes du mois en cours. Continue ?",onConfirm:copyPrev});}
+          else{copyPrev();}
+        }},el(Icon,{name:"rotate-ccw",size:14})," Mois précédent"),
+        el("button",{style:Object.assign({},S.copyBtn,{color:"#945ECF",borderColor:"#945ECF44",background:"#945ECF10"}),onClick:function(){
+          var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
+          if(hasData){setModal({kind:"confirmaction",title:"Pré-remplir avec la moyenne",message:"Cela va remplacer les lignes du mois en cours par les moyennes des 3 derniers mois. Continue ?",onConfirm:fillAverage});}
+          else{fillAverage();}
+        }},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
+        el("button",{style:S.resetBtn,onClick:function(){setModal({kind:"confirmaction",title:"Réinitialiser le mois",message:"Supprimer toutes les lignes et versements de ce mois ?",onConfirm:resetMonth});}},
+          "Réinitialiser")),
 
       Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
@@ -801,7 +810,11 @@ function App(){
       message:"Supprimer le projet « "+modal.projLabel+" » ?",
       onClose:()=>setModal(null),
       onConfirm:()=>{delProject(modal.projId);setModal(null);}}),
-    (modal&&modal.kind==="profile") && el(ProfileModal,{initial:profile,onClose:()=>setModal(null),onSave:function(p){setProfile(p);setModal(null);}})
+    (modal&&modal.kind==="profile") && el(ProfileModal,{initial:profile,onClose:()=>setModal(null),onSave:function(p){setProfile(p);setModal(null);}}),
+    (modal&&modal.kind==="confirmaction") && el(ConfirmModal,{
+      title:modal.title,message:modal.message,
+      onClose:()=>setModal(null),
+      onConfirm:function(){modal.onConfirm();setModal(null);}})
   );
 }
 
