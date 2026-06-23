@@ -299,7 +299,9 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
           el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
           el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
           el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
-        d.note&&el("div",{style:{fontSize:11,color:"var(--text-3)",paddingLeft:20,fontStyle:"italic"}},d.note));
+        (d.note||d.toBudget)&&el("div",{style:{display:"flex",alignItems:"center",gap:6,paddingLeft:20,flexWrap:"wrap"}},
+          d.note&&el("span",{style:{fontSize:11,color:"var(--text-3)",fontStyle:"italic"}},d.note),
+          d.toBudget&&el("span",{style:{fontSize:10,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"1px 6px"}},"→ ajouté au budget")));
     }));
 }
 
@@ -703,7 +705,13 @@ function App(){
   const setAmount=(k,id,a)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,amount:a}:x)}));
   const setReelAmount=(id,a)=>setMonthData(function(c){var r=Object.assign({},c.reel||{});r[id]=a;return Object.assign({},c,{reel:r});});
   const addLine=(k,l)=>setMonthData(c=>({...c,[k]:[...c[k],{id:uid(),label:l,amount:0}]}));
-  const delLine=(k,id)=>setMonthData(c=>({...c,[k]:c[k].filter(x=>x.id!==id)}));
+  const delLine=(k,id)=>setMonthData(c=>{
+    // Si on supprime une entrée issue d'une cagnotte, on annule aussi le retrait lié (le solde de la cagnotte est restauré)
+    var line=(c[k]||[]).find(function(x){return x.id===id;});
+    var next=Object.assign({},c,{[k]:c[k].filter(function(x){return x.id!==id;})});
+    if(line&&line.fromPotDepId){ next.deposits=(c.deposits||[]).filter(function(d){return d.id!==line.fromPotDepId;}); }
+    return next;
+  });
   const renameLine=(k,id,l)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,label:l}:x)}));
   const addPot=(p)=>setPots(prev=>[...prev,{...p,id:uid()}]);
   const delPot=(id)=>{setPots(prev=>prev.filter(p=>p.id!==id));setMonths(prev=>{const o={};Object.entries(prev).forEach(([k,v])=>o[k]={...v,deposits:(v.deposits||[]).filter(d=>d.potId!==id)});return o;});};
@@ -712,9 +720,24 @@ function App(){
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
-  const addWithdrawal=(id,a,note)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:-Math.abs(a),note:note||""}]}));
+  const addWithdrawal=(id,a,note,toBudget,potLabel)=>setMonthData(c=>{
+    var amt=Math.abs(a);
+    var depId=uid();
+    var dep={id:depId,potId:id,amount:-amt,note:note||"",toBudget:!!toBudget};
+    var next=Object.assign({},c,{deposits:[...(c.deposits||[]),dep]});
+    if(toBudget){
+      var revLine={id:uid(),label:(note&&note.trim())||("Retrait "+(potLabel||"cagnotte")),amount:amt,fromPot:id,fromPotLabel:potLabel||"",fromPotDepId:depId};
+      next.revenus=[...(c.revenus||[]),revLine];
+    }
+    return next;
+  });
   const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
-  const delDeposit=(id)=>setMonthData(c=>({...c,deposits:c.deposits.filter(d=>d.id!==id)}));
+  const delDeposit=(id)=>setMonthData(c=>{
+    // Supprime le mouvement et, si c'était un retrait réintégré au budget, la ligne d'entrée liée
+    var next=Object.assign({},c,{deposits:(c.deposits||[]).filter(function(d){return d.id!==id;})});
+    next.revenus=(c.revenus||[]).filter(function(r){return r.fromPotDepId!==id;});
+    return next;
+  });
   const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
   const fillAverage=function(){
     var pastKeys=[];
@@ -722,13 +745,14 @@ function App(){
     if(pastKeys.length===0){copyPrev();return;}
     function avgCat(cat){
       var labelMap={};
-      pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(!labelMap[line.label])labelMap[line.label]=[];labelMap[line.label].push(line.amount||0);});});
+      pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(line.fromPot)return;if(!labelMap[line.label])labelMap[line.label]=[];labelMap[line.label].push(line.amount||0);});});
       return Object.keys(labelMap).map(function(lbl){var ams=labelMap[lbl];var avg=Math.round(ams.reduce(function(s,a){return s+a;},0)/ams.length);var recurringVals=[];pastKeys.forEach(function(k){(months[k][cat]||[]).forEach(function(line){if(line.label===lbl&&line.recurring)recurringVals.push(true);});});return {id:uid(),label:lbl,amount:avg,recurring:recurringVals.length>0};});
     }
     setMonthData(function(){return {revenus:avgCat("revenus"),fixed:avgCat("fixed"),variable:avgCat("variable"),excep:[],deposits:[]};});
   };
   const copyPrev=()=>{const d=new Date(year,month-1,1);const pk=monthKey(d.getFullYear(),d.getMonth());const prev=months[pk];if(!prev)return;
-    setMonthData(()=>({revenus:prev.revenus.map(function(x){return Object.assign({},x,{id:uid()});}),fixed:prev.fixed.map(function(x){return Object.assign({},x,{id:uid()});}),variable:prev.variable.map(function(x){return Object.assign({},x,{id:uid()});}),excep:prev.excep.map(function(x){return Object.assign({},x,{id:uid(),amount:0});}),deposits:[]}));};
+    var notFromPot=function(x){return !x.fromPot;};
+    setMonthData(()=>({revenus:prev.revenus.filter(notFromPot).map(function(x){return Object.assign({},x,{id:uid()});}),fixed:prev.fixed.map(function(x){return Object.assign({},x,{id:uid()});}),variable:prev.variable.map(function(x){return Object.assign({},x,{id:uid()});}),excep:prev.excep.map(function(x){return Object.assign({},x,{id:uid(),amount:0});}),deposits:[]}));};
   const toggleRecurring=function(kind,id){setMonthData(function(c){
     return Object.assign({},c,{[kind]:c[kind].map(function(x){
       return x.id===id?Object.assign({},x,{recurring:!x.recurring}):x;
@@ -862,7 +886,7 @@ function App(){
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
     (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
     (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,months:months,total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
-    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,onClose:()=>setModal(null),onSave:function(a,note){addWithdrawal(modal.potId,a,note);setModal(null);}}),
+    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,onClose:()=>setModal(null),onSave:function(a,note,toBudget){addWithdrawal(modal.potId,a,note,toBudget,modal.potLabel);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -1395,9 +1419,10 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
       var reelV=showPrevus?parseFloat((reel||{})[it.id])||0:0;
       var diff=reelV-it.amount;
       var diffColor=diff>0?"#C8516C":(diff<0?"#19A979":"var(--text-3)");
+      var fromPot=!!it.fromPot;
       return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
         el("div",{style:S.lineRow},
-          el("span",{style:{...S.lineDot,background:cfg.accent}}),
+          el("span",{style:{...S.lineDot,background:fromPot?"#19A979":cfg.accent}}),
           el("input",{style:S.lineLabelInput,value:it.label,onChange:function(e){onRename(it.id,e.target.value);},placeholder:"Libellé"}),
           showPrevus && el("div",{style:{display:"flex",alignItems:"center",gap:6}},
             el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
@@ -1413,8 +1438,10 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
               onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
             el("span",{style:S.eur},"€")),
-          onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
+          onToggleRecurring&&!fromPot&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
+        fromPot&&el("div",{style:{display:"flex",alignItems:"center",gap:5,margin:"-2px 0 4px 22px"}},
+          el("span",{style:{fontSize:10.5,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"2px 7px"}},"↳ depuis « "+(it.fromPotLabel||"cagnotte")+" »")),
         );
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
@@ -1586,7 +1613,8 @@ function HistoryModal({pot,months,total,onClose}){
 function WithdrawModal({pot,onClose,onSave}){
   const [amount,setAmount]=useState("");
   const [note,setNote]=useState("");
-  const submit=function(){var a=parseFloat(amount);if(!a||a<=0)return;onSave(a,note.trim());};
+  const [toBudget,setToBudget]=useState(true);
+  const submit=function(){var a=parseFloat(amount);if(!a||a<=0)return;onSave(a,note.trim(),toBudget);};
   return el(Modal,{title:"Retirer de « "+pot.potLabel+" »",onClose},
     el("div",{style:{background:"#C8516C12",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"var(--text-2)"}},
       "Solde actuel : ",el("strong",{style:{color:pot.color}},fmt(pot.balance))),
@@ -1594,11 +1622,17 @@ function WithdrawModal({pot,onClose,onSave}){
       el("label",{style:S.fieldLabel},"Montant retiré (€)"),
       el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,
         onChange:function(e){setAmount(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&note)submit(); else if(e.key==="Enter"){}}})),
-    el("div",{style:{marginBottom:18}},
-      el("label",{style:S.fieldLabel},"Motif (optionnel — ex : Réparation voiture, Week-end à Paris…)"),
+    el("div",{style:{marginBottom:14}},
+      el("label",{style:S.fieldLabel},"Motif / à quoi ça sert (ex : Billets d'avion, Réparation voiture…)"),
       el("input",{value:note,placeholder:"Pourquoi ce retrait ?",style:S.input,onChange:function(e){setNote(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
-    parseFloat(amount)>pot.balance && el("p",{style:{fontSize:12,color:"#C8516C",margin:"-8px 0 12px"}},"⚠︎ Le montant dépasse le solde disponible."),
-    el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44"},onClick:submit},"Confirmer le retrait"));
+    el("button",{onClick:function(){setToBudget(!toBudget);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:toBudget?"#19A97910":"var(--surface-2)",borderRadius:12,padding:"12px 14px",marginBottom:8,cursor:"pointer",textAlign:"left"}},
+      el("div",{style:{flex:1,paddingRight:10}},
+        el("div",{style:{fontSize:13.5,fontWeight:700,color:"var(--text)"}},"Réintégrer dans le budget du mois"),
+        el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:2,lineHeight:1.4}},"Ajoute une entrée dans tes revenus du mois pour voir à quoi cet argent a servi.")),
+      el("span",{style:{width:42,height:24,borderRadius:12,background:toBudget?"#19A979":"var(--border)",position:"relative",transition:"background .2s",flexShrink:0}},
+        el("span",{style:{position:"absolute",top:2,left:toBudget?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))),
+    parseFloat(amount)>pot.balance && el("p",{style:{fontSize:12,color:"#C8516C",margin:"6px 0 12px"}},"⚠︎ Le montant dépasse le solde disponible."),
+    el("button",{style:{...S.saveBtn,marginTop:10,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44"},onClick:submit},"Confirmer le retrait"));
 }
 
 function ConfirmModal({title,message,onClose,onConfirm}){
