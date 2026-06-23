@@ -690,9 +690,9 @@ function App(){
   const setMonthData=(fn)=>setMonths(prev=>{const cur=prev[mk]||blankMonth();return{...prev,[mk]:fn(cur)};});
   const sum=(arr)=>arr.reduce((s,x)=>s+(x.amount||0),0);
 
-  const totalRevenus=sum(data.revenus), totalFixed=sum(data.fixed), totalVariable=sum(data.variable), totalExcep=sum(data.excep);
+  const totalRevenus=sum((data.revenus||[]).filter(function(r){return !r.fromPot;})), totalFixed=sum(data.fixed), totalVariable=sum(data.variable), totalExcep=sum(data.excep);
   const totalDep=totalFixed+totalVariable+totalExcep;
-  const totalSaved=sum(data.deposits||[]);
+  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget;}));
   const reste=totalRevenus-totalDep;
   const nonAffecte=reste-totalSaved;
   const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
@@ -1402,7 +1402,9 @@ function flowRow(icon,color,label,val,valColor){
 }
 
 function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring}){
-  const total=items.reduce((s,x)=>s+(x.amount||0),0);
+  var potFundingItems=kind==="revenus"?(items||[]).filter(function(x){return x.fromPot;}):[];
+  var realItems=kind==="revenus"?(items||[]).filter(function(x){return !x.fromPot;}):items;
+  const total=realItems.reduce((s,x)=>s+(x.amount||0),0);
   const totalReel=showPrevus?items.reduce(function(s,x){return s+(parseFloat((reel||{})[x.id])||0);},0):0;
   const [newLabel,setNewLabel]=useState("");
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
@@ -1415,14 +1417,13 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
       el("span",null,"Prévu"),
       el("span",null,"Réel"),
       el("span",{style:{minWidth:60,textAlign:"right"}},"Écart")),
-    el("div",{style:S.lineList}, items.map(function(it){
+    el("div",{style:S.lineList}, realItems.map(function(it){
       var reelV=showPrevus?parseFloat((reel||{})[it.id])||0:0;
       var diff=reelV-it.amount;
       var diffColor=diff>0?"#C8516C":(diff<0?"#19A979":"var(--text-3)");
-      var fromPot=!!it.fromPot;
       return el("div",{key:it.id,style:{display:"flex",flexDirection:"column",gap:0}},
         el("div",{style:S.lineRow},
-          el("span",{style:{...S.lineDot,background:fromPot?"#19A979":cfg.accent}}),
+          el("span",{style:{...S.lineDot,background:cfg.accent}}),
           el("input",{style:S.lineLabelInput,value:it.label,onChange:function(e){onRename(it.id,e.target.value);},placeholder:"Libellé"}),
           showPrevus && el("div",{style:{display:"flex",alignItems:"center",gap:6}},
             el("div",{style:{...S.lineAmtWrap,borderColor:it.amount>0?cfg.accent+"55":"var(--border)"}},
@@ -1438,10 +1439,8 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("input",{type:"number",inputMode:"decimal",style:S.lineAmtInput,value:it.amount||"",placeholder:"0",
               onChange:function(e){onAmount(it.id,parseFloat(e.target.value)||0);},onFocus:function(e){e.target.select();}}),
             el("span",{style:S.eur},"€")),
-          onToggleRecurring&&!fromPot&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
+          onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
-        fromPot&&el("div",{style:{display:"flex",alignItems:"center",gap:5,margin:"-2px 0 4px 22px"}},
-          el("span",{style:{fontSize:10.5,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"2px 7px"}},"↳ depuis « "+(it.fromPotLabel||"cagnotte")+" »")),
         );
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
@@ -1450,6 +1449,22 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
         el("span",{style:{color:cfg.accent}},fmt(total)),
         el("span",{style:{color:"var(--text-3)"}},"/ "+fmt(totalReel)),
         el("span",{style:{color:diffTotal>0?"#C8516C":(diffTotal<0?"#19A979":"var(--text-3)")}},(diffTotal>0?"+":"")+fmt(diffTotal)))),
+    potFundingItems.length>0&&el("div",{style:{marginTop:8,borderTop:"1px dashed var(--border)",paddingTop:8}},
+      el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}},
+        el("span",{style:{fontSize:11,fontWeight:700,color:"#19A979",display:"flex",alignItems:"center",gap:5}},
+          el(Icon,{name:"piggy-bank",size:12,color:"#19A979"}),"Financements depuis cagnottes"),
+        el("span",{style:{fontSize:11,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"2px 7px"}},
+          "+ "+fmt(potFundingItems.reduce(function(s,x){return s+(x.amount||0);},0))+" (hors budget)")),
+      potFundingItems.map(function(it){
+        return el("div",{key:it.id,style:{display:"flex",flexDirection:"column"}},
+          el("div",{style:Object.assign({},S.lineRow,{background:"#19A97908",borderRadius:8,padding:"4px 6px"})},
+            el(Icon,{name:"piggy-bank",size:13,color:"#19A979"}),
+            el("span",{style:{flex:1,fontSize:13,color:"var(--text)",padding:"0 6px"}},it.label),
+            el("span",{style:{fontSize:13,fontWeight:700,color:"#19A979",marginRight:6}},fmt(it.amount)+" €"),
+            el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
+          el("div",{style:{fontSize:10,color:"var(--text-3)",padding:"1px 0 4px 22px"}},
+            "↳ retrait depuis « "+(it.fromPotLabel||"cagnotte")+" » · non comptabilisé dans les revenus"));
+      })),
     el("div",{style:S.addLineRow},
       el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
       el("input",{style:S.addLineInput,value:newLabel,placeholder:"Ajouter une ligne…",onChange:function(e){setNewLabel(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addNew();}}),
