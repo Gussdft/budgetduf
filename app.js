@@ -878,9 +878,33 @@ function App(){
     tab==="budget" && el(React.Fragment,null,
       el("div",{style:S.flowCard},
         flowRow("coins","#19A979","Revenus","+ "+fmt(totalRevenus),"#19A979"),
-        flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
-        flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
-        flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF"),
+        (potCovFixed+potCovVariable+potCovExcep>0)?el(React.Fragment,null,
+          potCovFixed>0&&flowRow("house","#E8743B","Fixes","− "+fmt(totalFixed-potCovFixed)+" net","#E8743B"),
+          potCovFixed===0&&flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
+          potCovVariable>0&&flowRow("repeat","#F2B53C","Variables","− "+fmt(totalVariable-potCovVariable)+" net","#F2B53C"),
+          potCovVariable===0&&flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
+          potCovExcep>0&&flowRow("zap","#945ECF","Except.","− "+fmt(totalExcep-potCovExcep)+" net","#945ECF"),
+          potCovExcep===0&&flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF"),
+          (function(){
+            var totalCov=potCovFixed+potCovVariable+potCovExcep;
+            var deps=(data.deposits||[]).filter(function(d){return d.linkedExpenseId&&d.linkedExpenseCover;});
+            var details=deps.map(function(d){
+              var expLabel="";
+              var cats=["fixed","variable","excep"];
+              for(var i=0;i<cats.length;i++){var found=(data[cats[i]]||[]).find(function(x){return x.id===d.linkedExpenseId;});if(found){expLabel=found.label;break;}}
+              var pot=pots.find(function(p){return p.id===d.potId;});
+              return (pot?pot.label:"Cagnotte")+" → "+expLabel+" ("+fmt(d.linkedExpenseCover)+"€)";
+            });
+            return el("div",{style:{paddingLeft:26,paddingBottom:6,display:"flex",flexDirection:"column",gap:3}},
+              el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5}},
+                el("span",{style:{display:"flex",alignItems:"center",gap:5,color:"#19A979"}},el(Icon,{name:"piggy-bank",size:12,color:"#19A979"}),"Couverts par cagnottes"),
+                el("span",{style:{fontWeight:700,color:"#19A979",fontSize:12.5}},"+ "+fmt(totalCov)+" récupérés")),
+              details.map(function(txt,i){return el("div",{key:i,style:{fontSize:10.5,color:"var(--text-3)",paddingLeft:18}},txt);}));
+          })()
+        ):el(React.Fragment,null,
+          flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
+          flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
+          flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF")),
         totalSaved>0 && flowRow("piggy-bank","#1D8BCE","Épargné ce mois","− "+fmt(totalSaved),"#1D8BCE"),
         el("div",{style:S.flowDivider}),
         el("div",{style:{...S.resteBox,background:`linear-gradient(135deg,${restColor},${restColor}cc)`}},
@@ -1475,10 +1499,14 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
   const [newLabel,setNewLabel]=useState("");
   const addNew=()=>{ if(!newLabel.trim())return; onAdd(newLabel.trim()); setNewLabel(""); };
   var diffTotal=totalReel-total;
+  var totalCovered=kind!=="revenus"?realItems.reduce(function(s,x){return s+((x.potCovers||[]).reduce(function(a,c){return a+c.coveredAmount;},0));},0):0;
+  var netTotal=total-totalCovered;
   return el("div",{style:S.section},
     el("div",{style:S.sectionHead},
       el("span",{style:S.sectionTitle},el("span",{style:{color:cfg.accent,display:"flex"}},el(Icon,{name:cfg.icon,size:16,color:cfg.accent}))," "+cfg.title),
-      el("span",{style:{...S.badge,background:cfg.accent+"1a",color:cfg.accent}},cfg.sign+" "+fmt(total))),
+      el("div",{style:{display:"flex",alignItems:"center",gap:6}},
+        totalCovered>0&&el("span",{style:{fontSize:10,fontWeight:700,color:"#19A979",background:"#19A97918",borderRadius:6,padding:"1px 6px"}},el(Icon,{name:"piggy-bank",size:9,color:"#19A979"})," −"+fmt(totalCovered)),
+        el("span",{style:{...S.badge,background:cfg.accent+"1a",color:cfg.accent}},cfg.sign+" "+fmt(netTotal)))),
     showPrevus && el("div",{style:{display:"flex",justifyContent:"flex-end",gap:10,fontSize:12,color:"var(--text-3)",marginBottom:4}},
       el("span",null,"Prévu"),
       el("span",null,"Réel"),
