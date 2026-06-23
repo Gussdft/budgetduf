@@ -691,8 +691,10 @@ function App(){
   const sum=(arr)=>arr.reduce((s,x)=>s+(x.amount||0),0);
 
   const totalRevenus=sum((data.revenus||[]).filter(function(r){return !r.fromPot;})), totalFixed=sum(data.fixed), totalVariable=sum(data.variable), totalExcep=sum(data.excep);
-  const totalDep=totalFixed+totalVariable+totalExcep;
-  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget;}));
+  var potCovFn=function(cat){return (data[cat]||[]).reduce(function(s,x){return s+((x.potCovers||[]).reduce(function(a,c){return a+c.coveredAmount;},0));},0);};
+  var potCovFixed=potCovFn("fixed"),potCovVariable=potCovFn("variable"),potCovExcep=potCovFn("excep");
+  const totalDep=(totalFixed-potCovFixed)+(totalVariable-potCovVariable)+(totalExcep-potCovExcep);
+  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget&&!d.linkedExpenseId;}));
   const reste=totalRevenus-totalDep;
   const nonAffecte=reste-totalSaved;
   const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
@@ -706,10 +708,13 @@ function App(){
   const setReelAmount=(id,a)=>setMonthData(function(c){var r=Object.assign({},c.reel||{});r[id]=a;return Object.assign({},c,{reel:r});});
   const addLine=(k,l)=>setMonthData(c=>({...c,[k]:[...c[k],{id:uid(),label:l,amount:0}]}));
   const delLine=(k,id)=>setMonthData(c=>{
-    // Si on supprime une entrée issue d'une cagnotte, on annule aussi le retrait lié (le solde de la cagnotte est restauré)
     var line=(c[k]||[]).find(function(x){return x.id===id;});
     var next=Object.assign({},c,{[k]:c[k].filter(function(x){return x.id!==id;})});
     if(line&&line.fromPotDepId){ next.deposits=(c.deposits||[]).filter(function(d){return d.id!==line.fromPotDepId;}); }
+    if(line&&line.potCovers&&line.potCovers.length>0){
+      var coverDepIds=line.potCovers.map(function(pc){return pc.depId;});
+      next.deposits=(next.deposits||[]).filter(function(d){return coverDepIds.indexOf(d.id)===-1;});
+    }
     return next;
   });
   const renameLine=(k,id,l)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,label:l}:x)}));
@@ -720,22 +725,56 @@ function App(){
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
-  const addWithdrawal=(id,a,note,toBudget,potLabel)=>setMonthData(c=>{
+  const addWithdrawal=(id,a,note,opts,potLabel)=>setMonthData(c=>{
     var amt=Math.abs(a);
     var depId=uid();
-    var dep={id:depId,potId:id,amount:-amt,note:note||"",toBudget:!!toBudget};
-    var next=Object.assign({},c,{deposits:[...(c.deposits||[]),dep]});
-    if(toBudget){
+    var options=(opts&&typeof opts==="object")?opts:{mode:opts?"budget":"simple"};
+    var dep={id:depId,potId:id,amount:-amt,note:note||""};
+    var next=Object.assign({},c);
+    if(options.mode==="budget"){
+      dep.toBudget=true;
       var revLine={id:uid(),label:(note&&note.trim())||("Retrait "+(potLabel||"cagnotte")),amount:amt,fromPot:id,fromPotLabel:potLabel||"",fromPotDepId:depId};
       next.revenus=[...(c.revenus||[]),revLine];
+    } else if(options.mode==="expense"&&options.linkedExpenseId){
+      dep.linkedExpenseId=options.linkedExpenseId;
+      dep.linkedExpenseCover=options.linkedExpenseCover||amt;
+      var expCats=["fixed","variable","excep"];
+      for(var ci=0;ci<expCats.length;ci++){
+        var cat=expCats[ci];
+        var arr=next[cat]||[];
+        var found=false;
+        var newArr=arr.map(function(x){
+          if(x.id===options.linkedExpenseId){
+            found=true;
+            var covers=(x.potCovers||[]).concat([{depId:depId,potId:id,potLabel:potLabel||"",coveredAmount:options.linkedExpenseCover||amt}]);
+            return Object.assign({},x,{potCovers:covers});
+          }
+          return x;
+        });
+        if(found){next[cat]=newArr;break;}
+      }
     }
+    next.deposits=[...(c.deposits||[]),dep];
     return next;
   });
   const addDeposits=(entries)=>setMonthData(function(c){var add=entries.filter(function(e){return e.amount>0;}).map(function(e){return {id:uid(),potId:e.potId,amount:e.amount};});return Object.assign({},c,{deposits:[...(c.deposits||[]),...add]});});
   const delDeposit=(id)=>setMonthData(c=>{
-    // Supprime le mouvement et, si c'était un retrait réintégré au budget, la ligne d'entrée liée
+    var dep=(c.deposits||[]).find(function(d){return d.id===id;});
     var next=Object.assign({},c,{deposits:(c.deposits||[]).filter(function(d){return d.id!==id;})});
     next.revenus=(c.revenus||[]).filter(function(r){return r.fromPotDepId!==id;});
+    if(dep&&dep.linkedExpenseId){
+      var expCats=["fixed","variable","excep"];
+      for(var ci=0;ci<expCats.length;ci++){
+        var cat=expCats[ci];
+        if(!next[cat]) continue;
+        next[cat]=next[cat].map(function(x){
+          if(x.id===dep.linkedExpenseId){
+            return Object.assign({},x,{potCovers:(x.potCovers||[]).filter(function(pc){return pc.depId!==id;})});
+          }
+          return x;
+        });
+      }
+    }
     return next;
   });
   const potHistory=function(id){var out=[];Object.keys(months).sort().forEach(function(k){var t=(months[k].deposits||[]).filter(function(d){return d.potId===id;}).reduce(function(a,d){return a+d.amount;},0);if(t!==0)out.push({key:k,total:t});});return out;};
@@ -886,7 +925,7 @@ function App(){
     (modal&&modal.kind==="deposit") && el(DepositModal,{pot:modal,maxSuggest:nonAffecte,onClose:()=>setModal(null),onSave:a=>{addDeposit(modal.potId,a);setModal(null);}}),
     (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
     (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,months:months,total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
-    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,onClose:()=>setModal(null),onSave:function(a,note,toBudget){addWithdrawal(modal.potId,a,note,toBudget,modal.potLabel);setModal(null);}}),
+    (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,expenses:[...(data.fixed||[]),...(data.variable||[]),...(data.excep||[])],onClose:()=>setModal(null),onSave:function(a,note,opts){addWithdrawal(modal.potId,a,note,opts,modal.potLabel);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -1441,7 +1480,13 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("span",{style:S.eur},"€")),
           onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
-        );
+        it.potCovers&&it.potCovers.length>0&&it.potCovers.map(function(pc){
+          var net=Math.max(0,it.amount-pc.coveredAmount);
+          return el("div",{key:pc.depId,style:{display:"flex",alignItems:"center",gap:5,margin:"-2px 0 4px 22px",flexWrap:"wrap"}},
+            el(Icon,{name:"piggy-bank",size:11,color:"#19A979"}),
+            el("span",{style:{fontSize:10.5,color:"#19A979",fontWeight:700}},fmt(pc.coveredAmount)+" € couverts par « "+(pc.potLabel||"cagnotte")+" »"),
+            el("span",{style:{fontSize:10.5,color:"var(--text-3)"}},"→ "+fmt(net)+" € à ta charge"));
+        }));
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
       el("span",{style:{color:"var(--text-3)"}},"Totaux"),
@@ -1625,29 +1670,63 @@ function HistoryModal({pot,months,total,onClose}){
       el("span",{style:{color:total>=0?pot.color:"#C8516C"}},fmt(total))));
 }
 
-function WithdrawModal({pot,onClose,onSave}){
+function WithdrawModal({pot,expenses,onClose,onSave}){
   const [amount,setAmount]=useState("");
   const [note,setNote]=useState("");
-  const [toBudget,setToBudget]=useState(true);
-  const submit=function(){var a=parseFloat(amount);if(!a||a<=0)return;onSave(a,note.trim(),toBudget);};
+  const [mode,setMode]=useState("simple"); // "simple" | "expense"
+  const [selectedExpId,setSelectedExpId]=useState("");
+  var amt=parseFloat(amount)||0;
+  var selExp=(expenses||[]).find(function(x){return x.id===selectedExpId;});
+  var coveredAmt=Math.min(amt,selExp?selExp.amount:amt);
+  var netAmt=selExp?Math.max(0,selExp.amount-coveredAmt):0;
+  var overBalance=amt>pot.balance;
+  var canSubmit=amt>0&&!overBalance&&(mode==="simple"||(mode==="expense"&&selectedExpId));
+  const submit=function(){
+    if(!canSubmit) return;
+    var opts;
+    if(mode==="expense"){
+      opts={mode:"expense",linkedExpenseId:selectedExpId,linkedExpenseCover:coveredAmt};
+    } else {
+      opts={mode:"simple"};
+    }
+    onSave(amt,note.trim(),opts);
+  };
   return el(Modal,{title:"Retirer de « "+pot.potLabel+" »",onClose},
     el("div",{style:{background:"#C8516C12",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"var(--text-2)"}},
       "Solde actuel : ",el("strong",{style:{color:pot.color}},fmt(pot.balance))),
     el("div",{style:{marginBottom:14}},
       el("label",{style:S.fieldLabel},"Montant retiré (€)"),
       el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,
-        onChange:function(e){setAmount(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&note)submit(); else if(e.key==="Enter"){}}})),
+        onChange:function(e){setAmount(e.target.value);}})),
     el("div",{style:{marginBottom:14}},
-      el("label",{style:S.fieldLabel},"Motif / à quoi ça sert (ex : Billets d'avion, Réparation voiture…)"),
+      el("label",{style:S.fieldLabel},"Motif (optionnel)"),
       el("input",{value:note,placeholder:"Pourquoi ce retrait ?",style:S.input,onChange:function(e){setNote(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
-    el("button",{onClick:function(){setToBudget(!toBudget);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:toBudget?"#19A97910":"var(--surface-2)",borderRadius:12,padding:"12px 14px",marginBottom:8,cursor:"pointer",textAlign:"left"}},
-      el("div",{style:{flex:1,paddingRight:10}},
-        el("div",{style:{fontSize:13.5,fontWeight:700,color:"var(--text)"}},"Réintégrer dans le budget du mois"),
-        el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:2,lineHeight:1.4}},"Ajoute une entrée dans tes revenus du mois pour voir à quoi cet argent a servi.")),
-      el("span",{style:{width:42,height:24,borderRadius:12,background:toBudget?"#19A979":"var(--border)",position:"relative",transition:"background .2s",flexShrink:0}},
-        el("span",{style:{position:"absolute",top:2,left:toBudget?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))),
-    parseFloat(amount)>pot.balance && el("p",{style:{fontSize:12,color:"#C8516C",margin:"6px 0 12px"}},"⚠︎ Le montant dépasse le solde disponible."),
-    el("button",{style:{...S.saveBtn,marginTop:10,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44"},onClick:submit},"Confirmer le retrait"));
+    el("div",{style:{marginBottom:12}},
+      el("label",{style:S.fieldLabel},"À quoi sert ce retrait ?"),
+      el("div",{style:{display:"flex",gap:8}},
+        el("button",{onClick:function(){setMode("simple");},style:{flex:1,padding:"10px 8px",borderRadius:10,border:"2px solid "+(mode==="simple"?"#1D8BCE":"var(--border)"),background:mode==="simple"?"#1D8BCE14":"var(--surface-2)",color:mode==="simple"?"#1D8BCE":"var(--text-2)",fontWeight:700,fontSize:12.5,cursor:"pointer"}},
+          "Retrait libre",el("div",{style:{fontSize:10.5,fontWeight:500,marginTop:2,color:mode==="simple"?"#1D8BCE":"var(--text-3)"}},"sort de la cagnotte")),
+        (expenses&&expenses.length>0)&&el("button",{onClick:function(){setMode("expense");},style:{flex:1,padding:"10px 8px",borderRadius:10,border:"2px solid "+(mode==="expense"?"#19A979":"var(--border)"),background:mode==="expense"?"#19A97914":"var(--surface-2)",color:mode==="expense"?"#19A979":"var(--text-2)",fontWeight:700,fontSize:12.5,cursor:"pointer"}},
+          "Couvrir une dépense",el("div",{style:{fontSize:10.5,fontWeight:500,marginTop:2,color:mode==="expense"?"#19A979":"var(--text-3)"}},"affecte à une ligne du budget")))),
+    mode==="expense"&&el("div",{style:{marginBottom:12}},
+      el("label",{style:S.fieldLabel},"Sélectionne la dépense à couvrir"),
+      el("select",{value:selectedExpId,style:Object.assign({},S.input,{appearance:"auto"}),onChange:function(e){setSelectedExpId(e.target.value);}},
+        el("option",{value:""},"— Choisir une dépense —"),
+        (expenses||[]).filter(function(x){return x.amount>0;}).map(function(x){
+          return el("option",{key:x.id,value:x.id},x.label+" — "+fmt(x.amount)+" €");
+        })),
+      selExp&&amt>0&&el("div",{style:{marginTop:10,background:"#19A97910",borderRadius:10,padding:"10px 12px"}},
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+          el("span",{style:{color:"var(--text-3)"}},"Dépense totale"),
+          el("span",{style:{fontWeight:700}},fmt(selExp.amount)+" €")),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+          el("span",{style:{color:"var(--text-3)"}},"Couvert par la cagnotte"),
+          el("span",{style:{fontWeight:700,color:"#19A979"}},"− "+fmt(coveredAmt)+" €")),
+        el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:14,borderTop:"1px solid var(--border)",paddingTop:8,marginTop:4}},
+          el("span",{style:{fontWeight:700}},"Reste à ta charge"),
+          el("span",{style:{fontWeight:800,color:netAmt===0?"#19A979":"var(--text)"}},fmt(netAmt)+" €")))),
+    overBalance&&el("p",{style:{fontSize:12,color:"#C8516C",margin:"6px 0 8px"}},"⚠︎ Le montant dépasse le solde disponible."),
+    el("button",{style:Object.assign({},S.saveBtn,{marginTop:10,background:canSubmit?"linear-gradient(135deg,#C8516C,#e05575)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #C8516C44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Confirmer le retrait"));
 }
 
 function ConfirmModal({title,message,onClose,onConfirm}){
