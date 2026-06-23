@@ -285,24 +285,40 @@ function HouseholdScreen({onDone}) {
 // ----------------------------------------------------------------------------
 function MonthMovements({deposits,pots,monthLabel,delDeposit}){
   var [open,setOpen]=React.useState(false);
+  var ins=deposits.filter(function(d){return d.amount>0;});
+  var outs=deposits.filter(function(d){return d.amount<0;});
+  var totalIn=ins.reduce(function(s,d){return s+d.amount;},0);
+  var totalOut=outs.reduce(function(s,d){return s+d.amount;},0);
+  function renderDep(d){
+    var p=pots.find(function(x){return x.id===d.potId;});
+    var isW=d.amount<0;
+    var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
+    var sub=[];
+    if(d.note) sub.push(el("span",{key:"note",style:{fontSize:11,color:"var(--text-3)",fontStyle:"italic"}},d.note));
+    if(d.toBudget) sub.push(el("span",{key:"bgt",style:{fontSize:10,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"1px 6px"}},"→ ajouté au budget"));
+    if(d.linkedExpenseId) sub.push(el("span",{key:"exp",style:{fontSize:10,fontWeight:700,color:"#1D8BCE",background:"#1D8BCE12",borderRadius:6,padding:"1px 6px"}},"→ dépense couverte"));
+    if(d.surplusOf) sub.push(el("span",{key:"sur",style:{fontSize:10,fontWeight:700,color:"#E8743B",background:"#E8743B12",borderRadius:6,padding:"1px 6px"}},"surplus libre"));
+    return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:3,padding:"7px 6px",marginBottom:3,borderRadius:10,background:"var(--surface-2)"}},
+      el("div",{style:{display:"flex",alignItems:"center",gap:10}},
+        el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
+        el("span",{style:{flex:1,fontSize:13,color:"var(--text-2)"}},((p&&p.label)||"Supprimée")),
+        el("span",{style:{fontSize:14,fontWeight:700,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
+        el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
+      sub.length>0&&el("div",{style:{display:"flex",alignItems:"center",gap:6,paddingLeft:18,flexWrap:"wrap"}},sub));
+  }
   return el("div",{style:{marginTop:14}},
     el("button",{style:{...S.depHead,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",padding:0,cursor:"pointer",width:"100%"},onClick:function(){setOpen(!open);}},
-      "Mouvements de "+monthLabel+" ("+deposits.length+")",
+      "Mouvements de "+monthLabel,
+      totalIn>0&&el("span",{style:{fontSize:11,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"1px 7px",marginLeft:6}},"+"+fmt(totalIn)),
+      totalOut<0&&el("span",{style:{fontSize:11,fontWeight:700,color:"#C8516C",background:"#C8516C12",borderRadius:6,padding:"1px 7px",marginLeft:4}},"−"+fmt(-totalOut)),
       el("span",{style:{marginLeft:"auto",transition:"transform .15s",transform:open?"rotate(180deg)":"none",display:"flex"}},el(Icon,{name:"chevron-down",size:14}))),
-    open && deposits.map(function(d){
-      var p=pots.find(function(x){return x.id===d.potId;});
-      var isW=d.amount<0;
-      var amtColor=isW?"#C8516C":((p&&p.color)||"var(--text-3)");
-      return el("div",{key:d.id,style:{...S.itemRow,flexDirection:"column",alignItems:"stretch",gap:4}},
-        el("div",{style:{display:"flex",alignItems:"center",gap:11}},
-          el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
-          el("span",{style:S.lineLabel},(p&&p.label)||"Supprimée"),
-          el("span",{style:{...S.itemAmount,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
-          el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
-        (d.note||d.toBudget)&&el("div",{style:{display:"flex",alignItems:"center",gap:6,paddingLeft:20,flexWrap:"wrap"}},
-          d.note&&el("span",{style:{fontSize:11,color:"var(--text-3)",fontStyle:"italic"}},d.note),
-          d.toBudget&&el("span",{style:{fontSize:10,fontWeight:700,color:"#19A979",background:"#19A97915",borderRadius:6,padding:"1px 6px"}},"→ ajouté au budget")));
-    }));
+    open&&el(React.Fragment,null,
+      ins.length>0&&el("div",{style:{marginTop:10}},
+        el("div",{style:{fontSize:11,fontWeight:700,color:"#19A979",marginBottom:6,display:"flex",alignItems:"center",gap:5}},el(Icon,{name:"arrow-down-circle",size:12,color:"#19A979"}),"Versements ce mois"),
+        ins.map(renderDep)),
+      outs.length>0&&el("div",{style:{marginTop:ins.length>0?12:10}},
+        el("div",{style:{fontSize:11,fontWeight:700,color:"#C8516C",marginBottom:6,display:"flex",alignItems:"center",gap:5}},el(Icon,{name:"arrow-up-circle",size:12,color:"#C8516C"}),"Retraits ce mois"),
+        outs.map(renderDep))));
 }
 
 function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,year,month,setModal,delDeposit,projects,projectBalance,annualReturn,advisorMode,setAdvisorMode,setAnnualReturn,profile,avgMonthlyExpenses,editProject}){
@@ -323,7 +339,9 @@ function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,
         pots.length===0&&el("p",{style:S.blockHint},"Crée une cagnotte. Tu peux indiquer un solde de départ si tu as déjà de l'épargne."),
         el("div",{style:S.potList},pots.map(function(p){
           var bal=potBalance(p.id);
-          var thisMonth=(data.deposits||[]).filter(function(d){return d.potId===p.id;}).reduce(function(a,d){return a+d.amount;},0);
+          var thisMoDeposits=(data.deposits||[]).filter(function(d){return d.potId===p.id;});
+          var thisMoIn=thisMoDeposits.filter(function(d){return d.amount>0;}).reduce(function(a,d){return a+d.amount;},0);
+          var thisMoOut=thisMoDeposits.filter(function(d){return d.amount<0;}).reduce(function(a,d){return a+d.amount;},0);
           var pct=p.goal>0?Math.min(100,(bal/p.goal)*100):null;
           var pt=p.type&&POT_TYPES[p.type]?POT_TYPES[p.type]:null;
           var potKeys=Object.keys(months).sort();
@@ -331,7 +349,8 @@ function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,
           var potAvg=potKeys.length>0?Math.round(potTotalDep/potKeys.length):0;
           var mToGoal=(p.goal>0&&bal<p.goal&&potAvg>0)?monthsToGoal(bal,potAvg,p.goal,0):null;
           var metaParts=[];
-          if(thisMonth!==0) metaParts.push(thisMonth>0?"+ "+fmt(thisMonth)+" ce mois":"− "+fmt(-thisMonth)+" retiré ce mois");
+          if(thisMoIn>0) metaParts.push("+ "+fmt(thisMoIn)+" versés ce mois");
+          if(thisMoOut<0) metaParts.push("− "+fmt(-thisMoOut)+" retirés ce mois");
           if(potAvg>0) metaParts.push(fmt(potAvg)+"/mois en moy.");
           if(mToGoal!=null&&mToGoal>0) metaParts.push("~"+mToGoal+" mois pour finir");
           if(p.startBalance>0) metaParts.push("dont "+fmt(p.startBalance)+" de départ");
@@ -736,8 +755,11 @@ function App(){
       var revLine={id:uid(),label:(note&&note.trim())||("Retrait "+(potLabel||"cagnotte")),amount:amt,fromPot:id,fromPotLabel:potLabel||"",fromPotDepId:depId};
       next.revenus=[...(c.revenus||[]),revLine];
     } else if(options.mode==="expense"&&options.linkedExpenseId){
+      var covered=options.linkedExpenseCover||amt;
+      var surplus=amt-covered;
       dep.linkedExpenseId=options.linkedExpenseId;
-      dep.linkedExpenseCover=options.linkedExpenseCover||amt;
+      dep.linkedExpenseCover=covered;
+      dep.amount=-covered;
       var expCats=["fixed","variable","excep"];
       for(var ci=0;ci<expCats.length;ci++){
         var cat=expCats[ci];
@@ -746,12 +768,17 @@ function App(){
         var newArr=arr.map(function(x){
           if(x.id===options.linkedExpenseId){
             found=true;
-            var covers=(x.potCovers||[]).concat([{depId:depId,potId:id,potLabel:potLabel||"",coveredAmount:options.linkedExpenseCover||amt}]);
+            var covers=(x.potCovers||[]).concat([{depId:depId,potId:id,potLabel:potLabel||"",coveredAmount:covered}]);
             return Object.assign({},x,{potCovers:covers});
           }
           return x;
         });
         if(found){next[cat]=newArr;break;}
+      }
+      // Le surplus (retrait > dépense) est un retrait libre qui augmente le non-affecté
+      if(surplus>0){
+        next.deposits=[...(c.deposits||[]),dep,{id:uid(),potId:id,amount:-surplus,note:note||"",surplusOf:depId}];
+        return next;
       }
     }
     next.deposits=[...(c.deposits||[]),dep];
@@ -1480,13 +1507,22 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("span",{style:S.eur},"€")),
           onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
-        it.potCovers&&it.potCovers.length>0&&it.potCovers.map(function(pc){
-          var net=Math.max(0,it.amount-pc.coveredAmount);
-          return el("div",{key:pc.depId,style:{display:"flex",alignItems:"center",gap:5,margin:"-2px 0 4px 22px",flexWrap:"wrap"}},
-            el(Icon,{name:"piggy-bank",size:11,color:"#19A979"}),
-            el("span",{style:{fontSize:10.5,color:"#19A979",fontWeight:700}},fmt(pc.coveredAmount)+" € couverts par « "+(pc.potLabel||"cagnotte")+" »"),
-            el("span",{style:{fontSize:10.5,color:"var(--text-3)"}},"→ "+fmt(net)+" € à ta charge"));
-        }));
+        it.potCovers&&it.potCovers.length>0&&el("div",{style:{margin:"-2px 0 6px 22px"}},
+          it.potCovers.map(function(pc,pci){
+            var totalCovers=(it.potCovers||[]).reduce(function(s,c){return s+c.coveredAmount;},0);
+            var net=Math.max(0,it.amount-totalCovers);
+            var pct=it.amount>0?Math.min(100,Math.round(pc.coveredAmount/it.amount*100)):100;
+            var isLast=pci===it.potCovers.length-1;
+            var fullyPaid=isLast&&net===0;
+            return el("div",{key:pc.depId,style:{marginBottom:4}},
+              el("div",{style:{display:"flex",alignItems:"center",gap:5,marginBottom:3,flexWrap:"wrap"}},
+                el(Icon,{name:"piggy-bank",size:11,color:"#19A979"}),
+                el("span",{style:{fontSize:10.5,color:"#19A979",fontWeight:700}},fmt(pc.coveredAmount)+" € couverts par « "+(pc.potLabel||"cagnotte")+" »"),
+                fullyPaid&&el("span",{style:{fontSize:10,fontWeight:700,color:"#19A979",background:"#19A97920",borderRadius:5,padding:"0 5px"}},"✓ soldé")),
+              el("div",{style:{height:4,background:"var(--border-2)",borderRadius:3,overflow:"hidden",maxWidth:160}},
+                el("div",{style:{height:"100%",width:pct+"%",background:"#19A979",borderRadius:3,transition:"width .4s ease"}})),
+              isLast&&!fullyPaid&&el("div",{style:{fontSize:10.5,color:"var(--text-3)",marginTop:2}},fmt(net)+" € restent à ta charge"));
+          })));
     })),
     showPrevus && totalReel>0 && el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,padding:"8px 2px 0",borderTop:"1px dashed var(--border-2)",marginTop:6}},
       el("span",{style:{color:"var(--text-3)"}},"Totaux"),
@@ -1677,15 +1713,16 @@ function WithdrawModal({pot,expenses,onClose,onSave}){
   const [selectedExpId,setSelectedExpId]=useState("");
   var amt=parseFloat(amount)||0;
   var selExp=(expenses||[]).find(function(x){return x.id===selectedExpId;});
-  var coveredAmt=Math.min(amt,selExp?selExp.amount:amt);
+  var coveredAmt=selExp?Math.min(amt,selExp.amount):amt;
   var netAmt=selExp?Math.max(0,selExp.amount-coveredAmt):0;
+  var surplusAmt=selExp?Math.max(0,amt-selExp.amount):0;
   var overBalance=amt>pot.balance;
   var canSubmit=amt>0&&!overBalance&&(mode==="simple"||(mode==="expense"&&selectedExpId));
   const submit=function(){
     if(!canSubmit) return;
     var opts;
     if(mode==="expense"){
-      opts={mode:"expense",linkedExpenseId:selectedExpId,linkedExpenseCover:coveredAmt};
+      opts={mode:"expense",linkedExpenseId:selectedExpId,linkedExpenseCover:coveredAmt,surplus:surplusAmt};
     } else {
       opts={mode:"simple"};
     }
@@ -1724,7 +1761,12 @@ function WithdrawModal({pot,expenses,onClose,onSave}){
           el("span",{style:{fontWeight:700,color:"#19A979"}},"− "+fmt(coveredAmt)+" €")),
         el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:14,borderTop:"1px solid var(--border)",paddingTop:8,marginTop:4}},
           el("span",{style:{fontWeight:700}},"Reste à ta charge"),
-          el("span",{style:{fontWeight:800,color:netAmt===0?"#19A979":"var(--text)"}},fmt(netAmt)+" €")))),
+          el("span",{style:{fontWeight:800,color:netAmt===0?"#19A979":"var(--text)"}},fmt(netAmt)+" €")),
+        surplusAmt>0&&el("div",{style:{marginTop:10,background:"#E8743B12",borderRadius:8,padding:"8px 10px",display:"flex",gap:8,alignItems:"flex-start"}},
+          el(Icon,{name:"zap",size:14,color:"#E8743B"}),
+          el("div",{style:{fontSize:12,color:"var(--text-2)",lineHeight:1.5}},
+            el("strong",{style:{color:"#E8743B"}},fmt(surplusAmt)+" € en surplus"),
+            " — le retrait dépasse la dépense. Ce surplus sera disponible dans ton budget libre (non-affecté).")))),
     overBalance&&el("p",{style:{fontSize:12,color:"#C8516C",margin:"6px 0 8px"}},"⚠︎ Le montant dépasse le solde disponible."),
     el("button",{style:Object.assign({},S.saveBtn,{marginTop:10,background:canSubmit?"linear-gradient(135deg,#C8516C,#e05575)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #C8516C44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Confirmer le retrait"));
 }
