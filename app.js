@@ -262,7 +262,7 @@ function HouseholdScreen({onDone}) {
       el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Créer un foyer"),
       el("div",{style:{marginBottom:20}},
         el("label",{style:lbl},"Nom du foyer"),
-        el("input",{value:name,style:inp,placeholder:"ex : Foyer Dupont",autoFocus:true,
+        el("input",{value:name,style:inp,placeholder:"ex : Foyer Dupont",
           onChange:function(e){setName(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")create();}})),
       msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
       el("div",{style:{display:"flex",gap:10}},
@@ -274,7 +274,7 @@ function HouseholdScreen({onDone}) {
       el("h2",{style:{margin:"0 0 20px",fontSize:20,fontWeight:800}},"Rejoindre un foyer"),
       el("div",{style:{marginBottom:20}},
         el("label",{style:lbl},"Code d'invitation (6 lettres)"),
-        el("input",{value:code,style:{...inp,textTransform:"uppercase",letterSpacing:"4px",fontSize:22,fontWeight:700,textAlign:"center",fontFamily:"monospace"},placeholder:"XXXXXX",maxLength:6,autoFocus:true,
+        el("input",{value:code,style:{...inp,textTransform:"uppercase",letterSpacing:"4px",fontSize:22,fontWeight:700,textAlign:"center",fontFamily:"monospace"},placeholder:"XXXXXX",maxLength:6,
           onChange:function(e){setCode(e.target.value.toUpperCase());},onKeyDown:function(e){if(e.key==="Enter")join();}})),
       msg&&el("p",{style:{fontSize:13,color:"#C8516C",margin:"-8px 0 14px"}},msg),
       el("div",{style:{display:"flex",gap:10}},
@@ -378,7 +378,7 @@ function LoanModal({pots,onClose,onSave}){
     el("p",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,lineHeight:1.5}},"Un gros achat payé depuis tes livrets. Enregistre le montant total à te rembourser. Ensuite, tu rembourses librement — la somme que tu veux, quand tu veux, depuis la cagnotte de ton choix."),
     el("div",{style:{marginBottom:12}},
       el("label",{style:S.fieldLabel},"Nom de l'achat"),
-      el("input",{value:label,autoFocus:true,placeholder:"Ex : Canapé, Voyage, Ordinateur…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+      el("input",{value:label,placeholder:"Ex : Canapé, Voyage, Ordinateur…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
     el("div",{style:{marginBottom:12}},
       el("label",{style:S.fieldLabel},"Montant total à rembourser (€)"),
       el("input",{type:"number",inputMode:"decimal",value:total,placeholder:"0",style:S.input,onChange:function(e){setTotal(e.target.value);}})),
@@ -409,7 +409,7 @@ function ReimburseModal({loan,remaining,pots,onClose,onSave}){
       "Reste à rembourser : ",el("strong",{style:{color:"#945ECF"}},fmt(remaining))),
     el("div",{style:{marginBottom:12}},
       el("label",{style:S.fieldLabel},"Montant remboursé ce mois (€)"),
-      el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0",style:S.input,onChange:function(e){setAmount(e.target.value);}})),
+      el("input",{type:"number",inputMode:"decimal",value:amount,placeholder:"0",style:S.input,onChange:function(e){setAmount(e.target.value);}})),
     el("div",{style:{marginBottom:12}},
       el("label",{style:S.fieldLabel},"Vers quelle cagnotte ? (reconstitue le livret)"),
       el("select",{value:potId,style:Object.assign({},S.input,{appearance:"auto"}),onChange:function(e){setPotId(e.target.value);}},
@@ -1767,7 +1767,7 @@ function PotModal({initial,onClose,onSave}){
   const pickType=function(k){setType(k);setColor(POT_TYPES[k].color);};
   const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,startBalance:parseFloat(startBalance)||0,color,type});};
   return el(Modal,{title:initial?"Modifier la cagnotte":"Nouvelle cagnotte",onClose},
-    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,autoFocus:true,placeholder:"ex : Livret A, PEA Fortuneo…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom"),el("input",{value:label,placeholder:"ex : Livret A, PEA Fortuneo…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
     el("div",{style:{marginBottom:14}},
       el("label",{style:S.fieldLabel},"Type de compte"),
       el("div",{style:{display:"flex",flexDirection:"column",gap:6}},
@@ -1796,7 +1796,7 @@ function ProjectModal({initial,pots,onClose,onSave}){
   const togglePot=function(id){setLinkedPotIds(function(prev){return prev.indexOf(id)>=0?prev.filter(function(x){return x!==id;}):[...prev,id];});};
   const submit=function(){if(!label)return;onSave({label,goal:parseFloat(goal)||0,initialAmount:parseFloat(initialAmount)||0,monthlyContribution:parseFloat(monthlyContribution)||0,targetDate:targetDate,color:color,linkedPotIds:linkedPotIds});};
   return el(Modal,{title:initial?"Modifier le projet":"Nouveau projet",onClose},
-    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom du projet"),el("input",{value:label,autoFocus:true,placeholder:"ex : Apport maison, Voyage…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
+    el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Nom du projet"),el("input",{value:label,placeholder:"ex : Apport maison, Voyage…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Objectif total (€)"),el("input",{type:"number",inputMode:"decimal",value:goal,placeholder:"ex : 40000",style:S.input,onChange:function(e){setGoal(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Épargne déjà constituée (€)"),el("input",{type:"number",inputMode:"decimal",value:initialAmount,placeholder:"0",style:S.input,onChange:function(e){setInitialAmount(e.target.value);}})),
     el("div",{style:{marginBottom:14}},el("label",{style:S.fieldLabel},"Épargne mensuelle prévue (€) — optionnel"),el("input",{type:"number",inputMode:"decimal",value:monthlyContribution,placeholder:"Vide = rythme moyen",style:S.input,onChange:function(e){setMonthlyContribution(e.target.value);}})),
@@ -1841,7 +1841,7 @@ function DepositModal({pot,maxSuggest,onClose,onSave}){
   const submit=()=>{const a=parseFloat(amount);if(!a||a<=0)return;onSave(a);};
   return el(Modal,{title:`Verser dans « ${pot.potLabel} »`,onClose},
     maxSuggest>0 && el("button",{style:S.suggestBtn,onClick:()=>setAmount(String(Math.round(maxSuggest*100)/100))},el(Icon,{name:"arrow-right",size:14})," Verser tout le non-affecté ("+fmt(maxSuggest)+")"),
-    el("div",{style:{margin:"14px 0 18px"}},el("label",{style:S.fieldLabel},"Montant (€)"),el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,onChange:e=>setAmount(e.target.value),onKeyDown:e=>e.key==="Enter"&&submit()})),
+    el("div",{style:{margin:"14px 0 18px"}},el("label",{style:S.fieldLabel},"Montant (€)"),el("input",{type:"number",inputMode:"decimal",value:amount,placeholder:"0,00",style:S.input,onChange:e=>setAmount(e.target.value),onKeyDown:e=>e.key==="Enter"&&submit()})),
     el("button",{style:{...S.saveBtn,background:`linear-gradient(135deg,${pot.color},${pot.color}cc)`,boxShadow:`0 4px 14px ${pot.color}55`},onClick:submit},"Verser"));
 }
 
@@ -1939,7 +1939,7 @@ function WithdrawModal({pot,expenses,onClose,onSave}){
       "Solde actuel : ",el("strong",{style:{color:pot.color}},fmt(pot.balance))),
     el("div",{style:{marginBottom:14}},
       el("label",{style:S.fieldLabel},"Montant retiré (€)"),
-      el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0,00",style:S.input,
+      el("input",{type:"number",inputMode:"decimal",value:amount,placeholder:"0,00",style:S.input,
         onChange:function(e){setAmount(e.target.value);}})),
     el("div",{style:{marginBottom:14}},
       el("label",{style:S.fieldLabel},"Motif (optionnel)"),
