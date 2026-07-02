@@ -304,7 +304,7 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
         el("span",{style:{...S.itemDot,background:(p&&p.color)||"var(--border-3)"}}),
         el("span",{style:{flex:1,fontSize:13,color:"var(--text-2)"}},((p&&p.label)||"Supprimée")),
         el("span",{style:{fontSize:14,fontWeight:700,color:amtColor}},isW?"− "+fmt(-d.amount):"+ "+fmt(d.amount)),
-        !d.loanId&&el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
+        d.loanKind!=="purchase"&&el("button",{style:S.delBtn,onClick:function(){delDeposit(d.id);}},el(Icon,{name:"trash-2",size:13}))),
       sub.length>0&&el("div",{style:{display:"flex",alignItems:"center",gap:6,paddingLeft:18,flexWrap:"wrap"}},sub));
   }
   return el("div",{style:{marginTop:14}},
@@ -322,23 +322,25 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
         outs.map(renderDep))));
 }
 
+// Total remboursé pour un prêt (cumul sur tous les mois)
+function loanRepaid(loanId,months){
+  var r=0;
+  Object.keys(months||{}).forEach(function(k){
+    (months[k].deposits||[]).forEach(function(d){if(d.loanId===loanId&&d.loanKind==="repay")r+=d.amount;});
+  });
+  return r;
+}
+
 function LoansSection({loans,pots,months,year,month,potBalance,setModal,delLoan}){
   loans=loans||[];
-  var viewedKey=monthKey(year,month);
   return el("div",{style:Object.assign({},S.section,{marginTop:14})},
     el("div",{style:S.sectionHead},
       el("span",{style:S.sectionTitle},el("span",{style:{color:"#945ECF",display:"flex"}},el(Icon,{name:"repeat",size:16,color:"#945ECF"}))," Remboursements en cours"),
-      el("button",{style:{...S.smallBtn,color:"#945ECF",background:"#945ECF14"},onClick:function(){setModal({kind:"newloan"});}},el(Icon,{name:"plus",size:14,color:"#945ECF"})," Prêt")),
-    loans.length===0&&el("p",{style:S.blockHint},"Un gros achat sorti d'un livret ? Crée un remboursement pour te rembourser une somme fixe chaque mois. La mensualité apparaît automatiquement dans ton budget et reconstitue ta cagnotte."),
+      el("button",{style:{...S.smallBtn,color:"#945ECF",background:"#945ECF14"},onClick:function(){setModal({kind:"newloan"});}},el(Icon,{name:"plus",size:14,color:"#945ECF"})," Achat")),
+    loans.length===0&&el("p",{style:S.blockHint},"Un gros achat sorti de tes livrets ? Enregistre-le ici pour suivre ce qu'il te reste à te rembourser. Tu rembourses librement, le montant que tu veux, depuis la cagnotte de ton choix — un rappel apparaît en haut du budget."),
     el("div",{style:{display:"flex",flexDirection:"column",gap:12}},loans.map(function(l){
       var pot=pots.find(function(p){return p.id===l.potId;});
-      var repaid=0,doneMonths=0;
-      Object.keys(months).forEach(function(k){
-        if(k>viewedKey) return;
-        (months[k].deposits||[]).forEach(function(d){
-          if(d.loanId===l.id&&d.loanKind==="repay"){repaid+=d.amount;doneMonths++;}
-        });
-      });
+      var repaid=loanRepaid(l.id,months);
       var pct=l.total>0?Math.min(100,Math.round(repaid/l.total*100)):100;
       var remaining=Math.max(0,l.total-repaid);
       var color="#945ECF";
@@ -346,70 +348,77 @@ function LoansSection({loans,pots,months,year,month,potBalance,setModal,delLoan}
         el("div",{style:S.potTop},
           el("span",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
             el(Icon,{name:"repeat",size:15,color:color}),
-            el("strong",{style:{fontSize:14}},l.label),
-            pot&&el("span",{style:{fontSize:10,fontWeight:700,background:pot.color+"22",color:pot.color,borderRadius:6,padding:"2px 7px"}},pot.label)),
-          el("button",{style:{...S.delBtn,color:"#C8516C",marginLeft:"auto"},title:"Supprimer",onClick:function(){setModal({kind:"confirmaction",title:"Supprimer le remboursement",message:"Supprimer « "+l.label+" » ? Les mensualités et versements liés seront retirés de tous les mois.",onConfirm:function(){delLoan(l.id);setModal(null);}});}},el(Icon,{name:"trash-2",size:13}))),
+            el("strong",{style:{fontSize:14}},l.label)),
+          el("button",{style:{...S.delBtn,color:"#C8516C",marginLeft:"auto"},title:"Supprimer",onClick:function(){setModal({kind:"confirmaction",title:"Supprimer l'achat",message:"Supprimer « "+l.label+" » ? Le retrait et les remboursements liés seront retirés.",onConfirm:function(){delLoan(l.id);setModal(null);}});}},el(Icon,{name:"trash-2",size:13}))),
         el("div",{style:{display:"flex",alignItems:"baseline",gap:8,marginTop:6}},
           el("span",{style:{fontSize:22,fontWeight:800,color:color,letterSpacing:"-0.5px"}},fmt(repaid)),
           el("span",{style:{fontSize:13,color:"var(--text-3)"}},"/ "+fmt(l.total)+" remboursés")),
         el("div",{style:S.potBarTrack},el("div",{style:{...S.potBarFill,width:pct+"%",background:color}})),
         el("div",{style:S.potFoot},
           el("span",{style:{color:color,fontWeight:600}},pct+"%"),
-          el("span",{style:{color:"var(--text-3)"}},remaining>0?"reste "+fmt(remaining)+" ("+Math.max(0,l.numMonths-doneMonths)+" mois)":"Soldé 🎉")),
-        el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:8,lineHeight:1.5}},
-          fmt(l.monthly)+"/mois · "+l.numMonths+" mensualités"+(pot?" · reconstitue "+pot.label:"")));
+          el("span",{style:{color:"var(--text-3)"}},remaining>0?"reste "+fmt(remaining)+" à rembourser":"Soldé 🎉")),
+        remaining>0&&el("button",{style:{...S.depositBtn,marginTop:12,width:"100%",color:color,borderColor:color+"40"},onClick:function(){setModal({kind:"reimburse",loan:l,remaining:remaining});}},
+          el(Icon,{name:"plus",size:14,color:color})," Rembourser"));
     })));
 }
 
-function LoanModal({pots,startKey,onClose,onSave}){
+function LoanModal({pots,onClose,onSave}){
   const [label,setLabel]=useState("");
   const [potId,setPotId]=useState((pots&&pots[0]&&pots[0].id)||"");
   const [total,setTotal]=useState("");
-  const [monthly,setMonthly]=useState("");
   const [recordWithdrawal,setRecordWithdrawal]=useState(true);
-  const [repayThisMonth,setRepayThisMonth]=useState(true);
-  var t=parseFloat(total)||0, m=parseFloat(monthly)||0;
-  var numMonths=(t>0&&m>0)?Math.ceil(t/m):0;
-  var lastAmt=numMonths>0?(t-m*(numMonths-1)):0;
+  var t=parseFloat(total)||0;
   var pot=(pots||[]).find(function(p){return p.id===potId;});
-  var canSubmit=label.trim()&&potId&&t>0&&m>0&&numMonths>0;
+  var canSubmit=label.trim()&&t>0&&(!recordWithdrawal||potId);
   const submit=function(){
     if(!canSubmit) return;
-    onSave({label:label.trim(),potId:potId,potLabel:pot?pot.label:"",total:t,monthly:m,numMonths:numMonths,startKey:startKey,recordWithdrawal:recordWithdrawal,repayThisMonth:repayThisMonth});
+    onSave({label:label.trim(),potId:recordWithdrawal?potId:"",potLabel:(recordWithdrawal&&pot)?pot.label:"",total:t,recordWithdrawal:recordWithdrawal});
   };
-  return el(Modal,{title:"Nouveau remboursement",onClose},
-    el("p",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,lineHeight:1.5}},"Un gros achat payé depuis un livret, que tu rembourses par mensualités. La mensualité apparaît dans ton budget et reconstitue la cagnotte chaque mois."),
+  return el(Modal,{title:"Nouvel achat à rembourser",onClose},
+    el("p",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,lineHeight:1.5}},"Un gros achat payé depuis tes livrets. Enregistre le montant total à te rembourser. Ensuite, tu rembourses librement — la somme que tu veux, quand tu veux, depuis la cagnotte de ton choix."),
     el("div",{style:{marginBottom:12}},
       el("label",{style:S.fieldLabel},"Nom de l'achat"),
       el("input",{value:label,autoFocus:true,placeholder:"Ex : Canapé, Voyage, Ordinateur…",style:S.input,onChange:function(e){setLabel(e.target.value);}})),
     el("div",{style:{marginBottom:12}},
-      el("label",{style:S.fieldLabel},"Livret / cagnotte source"),
+      el("label",{style:S.fieldLabel},"Montant total à rembourser (€)"),
+      el("input",{type:"number",inputMode:"decimal",value:total,placeholder:"0",style:S.input,onChange:function(e){setTotal(e.target.value);}})),
+    el("button",{onClick:function(){setRecordWithdrawal(!recordWithdrawal);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:recordWithdrawal?"#C8516C10":"var(--surface-2)",borderRadius:12,padding:"11px 14px",marginBottom:10,cursor:"pointer",textAlign:"left"}},
+      el("div",{style:{flex:1,paddingRight:10}},
+        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)"}},"Retirer l'achat d'une cagnotte maintenant"),
+        el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:2,lineHeight:1.4}},"Enregistre le retrait de "+fmt(t)+" € ce mois-ci. Désactive si tu l'as déjà saisi ou réparti sur plusieurs livrets.")),
+      el("span",{style:{width:42,height:24,borderRadius:12,background:recordWithdrawal?"#C8516C":"var(--border)",position:"relative",flexShrink:0}},
+        el("span",{style:{position:"absolute",top:2,left:recordWithdrawal?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))),
+    recordWithdrawal&&el("div",{style:{marginBottom:12}},
+      el("label",{style:S.fieldLabel},"Cagnotte source"),
       el("select",{value:potId,style:Object.assign({},S.input,{appearance:"auto"}),onChange:function(e){setPotId(e.target.value);}},
         (pots||[]).length===0&&el("option",{value:""},"— Aucune cagnotte —"),
         (pots||[]).map(function(p){return el("option",{key:p.id,value:p.id},p.label);}))),
-    el("div",{style:{display:"flex",gap:10,marginBottom:12}},
-      el("div",{style:{flex:1}},
-        el("label",{style:S.fieldLabel},"Montant total (€)"),
-        el("input",{type:"number",inputMode:"decimal",value:total,placeholder:"0",style:S.input,onChange:function(e){setTotal(e.target.value);}})),
-      el("div",{style:{flex:1}},
-        el("label",{style:S.fieldLabel},"Mensualité (€)"),
-        el("input",{type:"number",inputMode:"decimal",value:monthly,placeholder:"0",style:S.input,onChange:function(e){setMonthly(e.target.value);}}))),
-    numMonths>0&&el("div",{style:{background:"#945ECF10",borderRadius:10,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:"var(--text-2)",lineHeight:1.6}},
-      el("div",null,el("strong",{style:{color:"#945ECF"}},numMonths+" mensualités")," de "+fmt(m)+" €"+(lastAmt!==m?" (dernière : "+fmt(lastAmt)+" €)":"")),
-      el("div",{style:{color:"var(--text-3)",marginTop:2}},"Chaque mois : −"+fmt(m)+" € dans ton budget, +"+fmt(m)+" € dans "+(pot?pot.label:"la cagnotte"))),
-    el("button",{onClick:function(){setRecordWithdrawal(!recordWithdrawal);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:recordWithdrawal?"#C8516C10":"var(--surface-2)",borderRadius:12,padding:"11px 14px",marginBottom:8,cursor:"pointer",textAlign:"left"}},
-      el("div",{style:{flex:1,paddingRight:10}},
-        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)"}},"Retirer l'achat du livret maintenant"),
-        el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:2,lineHeight:1.4}},"Enregistre le retrait de "+fmt(t)+" € ce mois-ci. Désactive si tu l'as déjà saisi.")),
-      el("span",{style:{width:42,height:24,borderRadius:12,background:recordWithdrawal?"#C8516C":"var(--border)",position:"relative",flexShrink:0}},
-        el("span",{style:{position:"absolute",top:2,left:recordWithdrawal?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))),
-    el("button",{onClick:function(){setRepayThisMonth(!repayThisMonth);},style:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",border:"none",background:repayThisMonth?"#945ECF10":"var(--surface-2)",borderRadius:12,padding:"11px 14px",marginBottom:8,cursor:"pointer",textAlign:"left"}},
-      el("div",{style:{flex:1,paddingRight:10}},
-        el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)"}},"Première mensualité ce mois-ci"),
-        el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:2,lineHeight:1.4}},repayThisMonth?"Le remboursement démarre ce mois.":"Le remboursement démarre le mois prochain.")),
-      el("span",{style:{width:42,height:24,borderRadius:12,background:repayThisMonth?"#945ECF":"var(--border)",position:"relative",flexShrink:0}},
-        el("span",{style:{position:"absolute",top:2,left:repayThisMonth?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}))),
-    el("button",{style:Object.assign({},S.saveBtn,{marginTop:10,background:canSubmit?"linear-gradient(135deg,#945ECF,#a875e0)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #945ECF44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Créer le remboursement"));
+    el("button",{style:Object.assign({},S.saveBtn,{marginTop:10,background:canSubmit?"linear-gradient(135deg,#945ECF,#a875e0)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #945ECF44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Enregistrer l'achat"));
+}
+
+function ReimburseModal({loan,remaining,pots,onClose,onSave}){
+  const [amount,setAmount]=useState("");
+  const [potId,setPotId]=useState((loan&&loan.potId)||(pots&&pots[0]&&pots[0].id)||"");
+  const [note,setNote]=useState("");
+  var a=parseFloat(amount)||0;
+  var pot=(pots||[]).find(function(p){return p.id===potId;});
+  var canSubmit=a>0&&potId;
+  const submit=function(){ if(!canSubmit) return; onSave(potId,a,note.trim()); };
+  return el(Modal,{title:"Rembourser « "+loan.label+" »",onClose},
+    el("div",{style:{background:"#945ECF10",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"var(--text-2)"}},
+      "Reste à rembourser : ",el("strong",{style:{color:"#945ECF"}},fmt(remaining))),
+    el("div",{style:{marginBottom:12}},
+      el("label",{style:S.fieldLabel},"Montant remboursé ce mois (€)"),
+      el("input",{type:"number",inputMode:"decimal",value:amount,autoFocus:true,placeholder:"0",style:S.input,onChange:function(e){setAmount(e.target.value);}})),
+    el("div",{style:{marginBottom:12}},
+      el("label",{style:S.fieldLabel},"Vers quelle cagnotte ? (reconstitue le livret)"),
+      el("select",{value:potId,style:Object.assign({},S.input,{appearance:"auto"}),onChange:function(e){setPotId(e.target.value);}},
+        (pots||[]).map(function(p){return el("option",{key:p.id,value:p.id},p.label);}))),
+    el("div",{style:{marginBottom:6}},
+      el("label",{style:S.fieldLabel},"Note (optionnel)"),
+      el("input",{value:note,placeholder:"Ex : remboursement partiel",style:S.input,onChange:function(e){setNote(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();}})),
+    a>0&&el("p",{style:{fontSize:11.5,color:"var(--text-3)",margin:"4px 0 8px",lineHeight:1.5}},"Ce montant sortira de ton budget du mois (épargne) et reconstituera "+(pot?pot.label:"la cagnotte")+"."),
+    el("button",{style:Object.assign({},S.saveBtn,{marginTop:8,background:canSubmit?"linear-gradient(135deg,#945ECF,#a875e0)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #945ECF44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Valider le remboursement"));
 }
 
 function EpargnePanel({pots,potBalance,avgMonthlySavings,totalSaved,data,months,year,month,setModal,delDeposit,projects,projectBalance,annualReturn,advisorMode,setAdvisorMode,setAnnualReturn,profile,avgMonthlyExpenses,editProject,loans,delLoan}){
@@ -808,7 +817,7 @@ function App(){
   var potCovFn=function(cat){return (data[cat]||[]).reduce(function(s,x){return s+((x.potCovers||[]).reduce(function(a,c){return a+c.coveredAmount;},0));},0);};
   var potCovFixed=potCovFn("fixed"),potCovVariable=potCovFn("variable"),potCovExcep=potCovFn("excep");
   const totalDep=(totalFixed-potCovFixed)+(totalVariable-potCovVariable)+(totalExcep-potCovExcep);
-  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget&&!d.linkedExpenseId&&!d.loanId;}));
+  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget&&!d.linkedExpenseId&&d.loanKind!=="purchase";}));
   const reste=totalRevenus-totalDep;
   const nonAffecte=reste-totalSaved;
   const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
@@ -838,28 +847,9 @@ function App(){
   const addProject=(proj)=>setProjects(prev=>[...prev,Object.assign({},proj,{id:uid()})]);
   const delProject=(id)=>setProjects(prev=>prev.filter(p=>p.id!==id));
   const editProject=(id,upd)=>setProjects(prev=>prev.map(p=>p.id===id?Object.assign({},p,upd):p));
-  // ---- Prêts à soi-même : gros achat sorti d'un livret, remboursé mensuellement ----
-  const addKMonths=function(key,k){var parts=key.split("-");var y=parseInt(parts[0],10);var m=parseInt(parts[1],10)-1+k;y+=Math.floor(m/12);m=((m%12)+12)%12;return monthKey(y,m);};
-  const materializeLoan=function(monthsObj,loan){
-    var next=Object.assign({},monthsObj);
-    var ensure=function(key){next[key]=next[key]?Object.assign({},next[key]):blankMonth();return next[key];};
-    // 1) L'achat : retrait du livret le mois de départ (n'impacte pas le budget mensuel)
-    if(loan.recordWithdrawal){
-      var mp=ensure(loan.startKey);
-      mp.deposits=[...(mp.deposits||[]),{id:uid(),potId:loan.potId,amount:-loan.total,note:"Achat : "+loan.label,loanId:loan.id,loanKind:"purchase"}];
-    }
-    // 2) Les remboursements mensuels : dépense budget + versement qui reconstitue le livret
-    var firstRepay=loan.repayThisMonth?0:1;
-    for(var i=0;i<loan.numMonths;i++){
-      var amt=(i<loan.numMonths-1)?loan.monthly:(loan.total-loan.monthly*(loan.numMonths-1));
-      amt=Math.round(amt*100)/100;
-      var key=addKMonths(loan.startKey,firstRepay+i);
-      var mm=ensure(key);
-      mm.fixed=[...(mm.fixed||[]),{id:uid(),label:"Remb. "+loan.label+" ("+(i+1)+"/"+loan.numMonths+")",amount:amt,loanId:loan.id,loanKind:"repay",repayIdx:i}];
-      mm.deposits=[...(mm.deposits||[]),{id:uid(),potId:loan.potId,amount:amt,note:"Remb. "+loan.label,loanId:loan.id,loanKind:"repay"}];
-    }
-    return next;
-  };
+  // ---- Prêts à soi-même : gros achat sorti d'un ou plusieurs livrets, remboursé librement ----
+  // Modèle : le prêt est un simple suivi de dette (montant total dû). Les remboursements
+  // sont manuels et variables (montant + cagnotte au choix), autant de fois que voulu.
   const stripLoan=function(monthsObj,loanId){
     var out={};
     Object.keys(monthsObj).forEach(function(k){
@@ -874,7 +864,12 @@ function App(){
   const addLoan=function(loan){
     var full=Object.assign({},loan,{id:uid()});
     setLoans(function(prev){return [...prev,full];});
-    setMonths(function(m){return materializeLoan(m,full);});
+    // L'achat : retrait du/des livret(s) source(s) ce mois-ci (n'impacte pas le budget mensuel)
+    if(loan.recordWithdrawal&&loan.potId){
+      setMonthData(function(c){
+        return Object.assign({},c,{deposits:[...(c.deposits||[]),{id:uid(),potId:loan.potId,amount:-loan.total,note:"Achat : "+loan.label,loanId:full.id,loanKind:"purchase"}]});
+      });
+    }
   };
   const delLoan=function(id){
     setLoans(function(prev){return prev.filter(function(l){return l.id!==id;});});
@@ -882,11 +877,14 @@ function App(){
   };
   const editLoan=function(id,upd){
     setLoans(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,upd):l;});});
-    setMonths(function(m){
-      var loan=Object.assign({},loans.find(function(l){return l.id===id;}),upd,{id:id});
-      return materializeLoan(stripLoan(m,id),loan);
-    });
   };
+  // Rembourser une dette : versement libre (montant variable) dans une cagnotte, tagué au prêt.
+  // Compte comme de l'épargne du mois (réduit le non-affecté, reconstitue la cagnotte).
+  const reimburseLoan=(loanId,potId,amount,note)=>setMonthData(function(c){
+    var amt=Math.abs(parseFloat(amount)||0);
+    if(amt<=0) return c;
+    return Object.assign({},c,{deposits:[...(c.deposits||[]),{id:uid(),potId:potId,amount:amt,note:note||"Remboursement",loanId:loanId,loanKind:"repay"}]});
+  });
   const addDeposit=(id,a)=>setMonthData(c=>({...c,deposits:[...(c.deposits||[]),{id:uid(),potId:id,amount:a}]}));
   const addWithdrawal=(id,a,note,opts,potLabel)=>setMonthData(c=>{
     var amt=Math.abs(a);
@@ -1034,6 +1032,18 @@ function App(){
 
     // ---- TAB BUDGET ----
     tab==="budget" && el(React.Fragment,null,
+      (function(){
+        var active=(loans||[]).map(function(l){var repaid=loanRepaid(l.id,months);return {l:l,remaining:Math.max(0,l.total-repaid)};}).filter(function(x){return x.remaining>0;});
+        if(active.length===0) return null;
+        var totalRemaining=active.reduce(function(s,x){return s+x.remaining;},0);
+        return el("div",{style:{background:"#945ECF12",border:"1px solid #945ECF33",borderRadius:14,padding:"12px 14px",marginBottom:2,display:"flex",gap:10,alignItems:"flex-start"}},
+          el("span",{style:{flexShrink:0,marginTop:1}},el(Icon,{name:"repeat",size:17,color:"#945ECF"})),
+          el("div",{style:{flex:1}},
+            el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)"}},"Pense à tes remboursements"),
+            el("div",{style:{fontSize:11.5,color:"var(--text-2)",marginTop:3,lineHeight:1.5}},
+              "Il te reste "+fmt(totalRemaining)+" à te rembourser : "+active.map(function(x){return x.l.label+" ("+fmt(x.remaining)+")";}).join(", ")+". Prévois une part de ton budget ce mois-ci."),
+            el("button",{style:{marginTop:8,background:"#945ECF",color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer"},onClick:function(){setTab("epargne");}},"Voir mes remboursements →")));
+      })(),
       el("div",{style:S.flowCard},
         flowRow("coins","#19A979","Revenus","+ "+fmt(totalRevenus),"#19A979"),
         (potCovFixed+potCovVariable+potCovExcep>0)?el(React.Fragment,null,
@@ -1135,7 +1145,8 @@ function App(){
     (modal&&modal.kind==="allocate") && el(AllocateModal,{pots:pots,available:nonAffecte,onClose:()=>setModal(null),onSave:function(entries){addDeposits(entries);setModal(null);}}),
     (modal&&modal.kind==="history") && el(HistoryModal,{pot:modal.pot,months:months,total:potBalance(modal.pot.id),onClose:()=>setModal(null)}),
     (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,expenses:[...(data.fixed||[]),...(data.variable||[]),...(data.excep||[])],onClose:()=>setModal(null),onSave:function(a,note,opts){addWithdrawal(modal.potId,a,note,opts,modal.potLabel);setModal(null);}}),
-    (modal&&modal.kind==="newloan") && el(LoanModal,{pots:pots,startKey:mk,onClose:()=>setModal(null),onSave:function(loan){addLoan(loan);setModal(null);}}),
+    (modal&&modal.kind==="newloan") && el(LoanModal,{pots:pots,onClose:()=>setModal(null),onSave:function(loan){addLoan(loan);setModal(null);}}),
+    (modal&&modal.kind==="reimburse") && el(ReimburseModal,{loan:modal.loan,remaining:modal.remaining,pots:pots,onClose:()=>setModal(null),onSave:function(potId,amount,note){reimburseLoan(modal.loan.id,potId,amount,note);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
