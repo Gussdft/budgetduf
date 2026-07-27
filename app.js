@@ -3903,6 +3903,54 @@ function DonutChart(props){
       })));
 }
 
+// ---- Prévision de trésorerie (épargne projetée sur les mois à venir) ----
+function ForecastCard(props){
+  var startBalance=props.startBalance||0;
+  var monthlyNet=Math.round(props.monthlyNet||0);
+  var compact=props.compact;
+  var [horizon,setHorizon]=useState(6);
+  var pts=Core.forecast(startBalance,monthlyNet,horizon);
+  var end=pts[pts.length-1].balance;
+  var vals=pts.map(function(p){return p.balance;});
+  var maxV=Math.max.apply(null,vals),minV=Math.min.apply(null,vals);
+  var range=(maxV-minV)||1;
+  var W=compact?300:520,H=compact?70:96,pad=6;
+  var xy=pts.map(function(p,i){
+    var x=pad+(W-2*pad)*(i/(pts.length-1));
+    var y=pad+(H-2*pad)*(1-(p.balance-minV)/range);
+    return [x,y];
+  });
+  var line=xy.map(function(c,i){return (i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1);}).join(" ");
+  var zeroY=null;
+  if(minV<0&&maxV>0){ zeroY=pad+(H-2*pad)*(1-(0-minV)/range); }
+  var area=line+" L"+xy[xy.length-1][0].toFixed(1)+" "+(H-pad)+" L"+xy[0][0].toFixed(1)+" "+(H-pad)+" Z";
+  var up=monthlyNet>=0;
+  var col=up?"#19A979":"#C8516C";
+  var goesNegative=vals.some(function(v){return v<0;});
+  var segStyle=function(v){return {flex:"none",padding:"5px 12px",borderRadius:9,border:"none",fontSize:12.5,fontWeight:700,cursor:"pointer",background:horizon===v?"#1D8BCE18":"var(--surface-2)",color:horizon===v?"#1D8BCE":"var(--text-3)"};};
+  return el("div",{style:{background:"var(--surface)",borderRadius:20,padding:compact?18:20,boxShadow:"var(--shadow-card)"}},
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}},
+      el("span",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"trending-up",size:15,color:"#1D8BCE"}),"Prévision de trésorerie"),
+      el("div",{style:{display:"flex",gap:6}},el("button",{style:segStyle(6),onClick:function(){setHorizon(6);}},"6 mois"),el("button",{style:segStyle(12),onClick:function(){setHorizon(12);}},"12 mois"))),
+    el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:12}},
+      "À ton rythme actuel : ",el("strong",{style:{color:col}},(up?"+ ":"− ")+fmt(Math.abs(monthlyNet))+" / mois"),
+      monthlyNet===0?" (renseigne quelques mois pour estimer)":""),
+    el("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",height:H,display:"block"},preserveAspectRatio:"none"},
+      el("defs",null,el("linearGradient",{id:"fcg",x1:"0",y1:"0",x2:"0",y2:"1"},
+        el("stop",{offset:"0%","stop-color":col,"stop-opacity":"0.28"}),
+        el("stop",{offset:"100%","stop-color":col,"stop-opacity":"0.02"}))),
+      zeroY!==null&&el("line",{x1:pad,y1:zeroY,x2:W-pad,y2:zeroY,stroke:"#C8516C",strokeWidth:"1",strokeDasharray:"3 3","stroke-opacity":"0.5"}),
+      el("path",{d:area,fill:"url(#fcg)",stroke:"none"}),
+      el("path",{d:line,fill:"none",stroke:col,strokeWidth:"2.5",strokeLinejoin:"round",strokeLinecap:"round"}),
+      el("circle",{cx:xy[xy.length-1][0],cy:xy[xy.length-1][1],r:"3.5",fill:col})),
+    el("div",{style:{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginTop:12,flexWrap:"wrap",gap:6}},
+      el("span",{style:{fontSize:12.5,color:"var(--text-3)"}},"Épargne projetée dans "+horizon+" mois"),
+      el("span",{style:{fontSize:22,fontWeight:800,letterSpacing:"-0.5px",color:end>=startBalance?"#19A979":"#C8516C"}},fmt(end))),
+    goesNegative&&el("div",{style:{marginTop:10,background:"#C8516C12",borderRadius:10,padding:"9px 12px",fontSize:12,color:"var(--text-2)",lineHeight:1.5,display:"flex",gap:7}},
+      el(Icon,{name:"zap",size:14,color:"#C8516C",style:{flexShrink:0,marginTop:1}}),
+      el("span",null,"À ce rythme, ton épargne passe sous zéro avant ",horizon," mois. Réduis tes dépenses ou revois tes versements.")));
+}
+
 // ---- Tableau de bord PC (large, multi-colonnes) ----
 function DesktopDashboard(props){
   var totalRevenus=props.totalRevenus,totalFixed=props.totalFixed,totalVariable=props.totalVariable,totalExcep=props.totalExcep;
@@ -4033,7 +4081,8 @@ function DesktopDashboard(props){
       kpiCard("Épargne de précaution",totalDep>0?(precautionMonths.toFixed(1).replace(".",",")+" mois"):"—",precColor,precautionMonths>=3?"confortable":"à renforcer",precColor),
       kpiCard("Reste à vivre",fmt(nonAffecte),resteColor,"non affecté")),
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
-      budgetCard(),cagnottesCard(),loansCard(),projetsCard()));
+      budgetCard(),cagnottesCard(),loansCard(),projetsCard()),
+    el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}));
 }
 
 // ---- Tableau de bord ----
@@ -4113,6 +4162,9 @@ function DashboardScreen(props){
     el("div",{style:cardStyle},
       el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:10}},"Tendance — 6 derniers mois"),
       el(MiniTrendChart,{months:months})),
+
+    // --- Prévision de trésorerie ---
+    el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
 
     // --- Carte Mois en cours ---
     el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},

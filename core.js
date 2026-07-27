@@ -98,6 +98,35 @@
     return s;
   }
 
+  // Flux net moyen par mois (revenus − dépenses nettes) sur les mois réellement saisis.
+  // Un mois "saisi" = au moins une ligne de revenu ou de dépense.
+  function avgMonthlyNet(months){
+    months = months || {};
+    var ks = Object.keys(months);
+    var sum = 0, count = 0;
+    for(var i=0;i<ks.length;i++){
+      var m = months[ks[i]];
+      var hasData = (m.revenus&&m.revenus.length) || (m.fixed&&m.fixed.length) || (m.variable&&m.variable.length) || (m.excep&&m.excep.length);
+      if(!hasData) continue;
+      var t = monthTotals(m);
+      sum += t.reste;   // revenus − dépenses nettes (avant épargne : c'est ce qui reste à mettre de côté)
+      count++;
+    }
+    return count > 0 ? sum / count : 0;
+  }
+
+  // Projection de trésorerie : solde de départ + flux net chaque mois, sur n mois.
+  // Renvoie [{month:0,balance:start}, {month:1,...}, …] — month 0 = maintenant.
+  function forecast(startBalance, monthlyNet, nMonths){
+    startBalance = startBalance || 0;
+    monthlyNet = monthlyNet || 0;
+    nMonths = nMonths || 0;
+    var out = [{month:0, balance:startBalance}];
+    var bal = startBalance;
+    for(var i=1;i<=nMonths;i++){ bal += monthlyNet; out.push({month:i, balance:bal}); }
+    return out;
+  }
+
   var Core = {
     sumAmounts: sumAmounts,
     potCovered: potCovered,
@@ -105,7 +134,9 @@
     loanRepaid: loanRepaid,
     potDeposits: potDeposits,
     potBalance: potBalance,
-    projectBalance: projectBalance
+    projectBalance: projectBalance,
+    avgMonthlyNet: avgMonthlyNet,
+    forecast: forecast
   };
 
   if(typeof module !== "undefined" && module.exports){ module.exports = Core; }
