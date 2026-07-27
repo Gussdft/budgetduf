@@ -336,14 +336,8 @@ function MonthMovements({deposits,pots,monthLabel,delDeposit}){
         outs.map(renderDep))));
 }
 
-// Total remboursé pour un prêt (cumul sur tous les mois)
-function loanRepaid(loanId,months){
-  var r=0;
-  Object.keys(months||{}).forEach(function(k){
-    (months[k].deposits||[]).forEach(function(d){if(d.loanId===loanId&&d.loanKind==="repay")r+=d.amount;});
-  });
-  return r;
-}
+// Total remboursé pour un prêt — délègue à core.js (source unique, testée)
+function loanRepaid(loanId,months){ return Core.loanRepaid(loanId,months); }
 
 function LoansSection({loans,pots,months,year,month,potBalance,setModal,delLoan}){
   loans=loans||[];
@@ -839,18 +833,19 @@ function App(){
   const setMonthData=(fn)=>setMonths(prev=>{const cur=prev[mk]||blankMonth();return{...prev,[mk]:fn(cur)};});
   const sum=(arr)=>arr.reduce((s,x)=>s+(x.amount||0),0);
 
-  const totalRevenus=sum((data.revenus||[]).filter(function(r){return !r.fromPot;})), totalFixed=sum(data.fixed), totalVariable=sum(data.variable), totalExcep=sum(data.excep);
-  var potCovFn=function(cat){return (data[cat]||[]).reduce(function(s,x){return s+((x.potCovers||[]).reduce(function(a,c){return a+c.coveredAmount;},0));},0);};
-  var potCovFixed=potCovFn("fixed"),potCovVariable=potCovFn("variable"),potCovExcep=potCovFn("excep");
-  const totalDep=(totalFixed-potCovFixed)+(totalVariable-potCovVariable)+(totalExcep-potCovExcep);
-  const totalSaved=sum((data.deposits||[]).filter(function(d){return !d.toBudget&&!d.linkedExpenseId&&d.loanKind!=="purchase";}));
-  const reste=totalRevenus-totalDep;
-  const nonAffecte=reste-totalSaved;
-  const potDeposits=(id)=>Object.values(months).reduce((s,m)=>s+(m.deposits||[]).filter(d=>d.potId===id).reduce((a,d)=>a+d.amount,0),0);
-  const potBalance=(id)=>{var p=pots.find(function(x){return x.id===id;});return (p&&p.startBalance||0)+potDeposits(id);};
+  // Calculs financiers centralisés dans core.js (purs & testés — voir core.test.js)
+  var _mt=Core.monthTotals(data);
+  const totalRevenus=_mt.revenus, totalFixed=_mt.fixed, totalVariable=_mt.variable, totalExcep=_mt.excep;
+  var potCovFixed=_mt.potCovFixed,potCovVariable=_mt.potCovVariable,potCovExcep=_mt.potCovExcep;
+  const totalDep=_mt.dep;
+  const totalSaved=_mt.saved;
+  const reste=_mt.reste;
+  const nonAffecte=_mt.nonAffecte;
+  const potDeposits=(id)=>Core.potDeposits(months,id);
+  const potBalance=(id)=>Core.potBalance(pots,months,id);
   const avgMonthlySavings=()=>{var keys=Object.keys(months).sort();if(keys.length===0)return 0;var total=keys.reduce(function(s,k){return s+(months[k].deposits||[]).reduce(function(a,d){return a+d.amount;},0);},0);return total/keys.length;};
   const avgMonthlyExpenses=()=>{var keys=Object.keys(months);if(keys.length===0)return 0;var total=keys.reduce(function(s,k){var m=months[k];return s+sum(m.fixed||[])+sum(m.variable||[])+sum(m.excep||[]);},0);return total/keys.length;};
-  const projectBalance=(proj)=>(proj.initialAmount||0)+(proj.linkedPotIds||[]).reduce(function(s,id){return s+potBalance(id);},0);
+  const projectBalance=(proj)=>Core.projectBalance(pots,months,proj);
 
   const changeMonth=(d)=>{let m=month+d,y=year;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMonth(m);setYear(y);};
   const setAmount=(k,id,a)=>setMonthData(c=>({...c,[k]:c[k].map(x=>x.id===id?{...x,amount:a}:x)}));
