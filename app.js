@@ -1,6 +1,20 @@
 const { useState, useEffect, useRef } = React;
 const el = React.createElement;
 
+// Détecte les grands écrans (PC) pour basculer sur le tableau de bord large
+function useIsWide(bp){
+  bp=bp||1000;
+  var init=(typeof window!=="undefined")&&window.innerWidth>=bp;
+  var [wide,setWide]=useState(init);
+  useEffect(function(){
+    var on=function(){setWide(window.innerWidth>=bp);};
+    window.addEventListener("resize",on);
+    on();
+    return function(){window.removeEventListener("resize",on);};
+  },[bp]);
+  return wide;
+}
+
 // ---- Supabase ----
 const SUPABASE_URL = "https://pytwcfyblzcxwglfdgwy.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5dHdjZnlibHpjeHdnbGZkZ3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTU4MDAsImV4cCI6MjA5NTYzMTgwMH0.DyJnpsw7e20Wb_NJtZtwnObT7LkN2t6FrrxcCKE5w1g";
@@ -681,6 +695,7 @@ function App(){
   const [pots,setPots]         = useState([]);
   const [projects,setProjects] = useState([]);
   const [loans,setLoans]       = useState([]);
+  const isWide = useIsWide(1000);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
   const [tab,setTab]           = useState(function(){
@@ -1021,7 +1036,8 @@ function App(){
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Synchronisation…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
 
-  return el("div",{style:S.app},
+  var appStyle=(isWide&&tab==="accueil")?Object.assign({},S.app,{maxWidth:1180}):S.app;
+  return el("div",{style:appStyle},
     // header
     el("header",{style:S.header},
       el("div",{style:{display:"flex",alignItems:"center",gap:12}},
@@ -1040,7 +1056,9 @@ function App(){
     el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:14}},
 
     // ---- TAB ACCUEIL ----
-    tab==="accueil" && el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab}),
+    tab==="accueil" && (isWide
+      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab})
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && el(React.Fragment,null,
@@ -1141,7 +1159,7 @@ function App(){
     ), // fin du panneau d'onglet
 
     // ---- barre d'onglets en bas (style iOS) ----
-    el("nav",{style:S.tabBar},
+    el("nav",{style:isWide?Object.assign({},S.tabBar,{left:"50%",right:"auto",transform:"translateX(-50%)",width:520,maxWidth:"calc(100% - 32px)"}):S.tabBar},
       [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?{color:"#1D8BCE"}:{}),onClick:function(){setTab(id);}},
@@ -3906,6 +3924,139 @@ function DonutChart(props){
           el("span",{style:{color:"var(--text-2)",fontWeight:600}},cat.label),
           el("span",{style:{color:"var(--text-3)"}},fmt(cat.value)));
       })));
+}
+
+// ---- Tableau de bord PC (large, multi-colonnes) ----
+function DesktopDashboard(props){
+  var totalRevenus=props.totalRevenus,totalFixed=props.totalFixed,totalVariable=props.totalVariable,totalExcep=props.totalExcep;
+  var totalSaved=props.totalSaved,nonAffecte=props.nonAffecte,reste=props.reste;
+  var pots=props.pots||[],projects=props.projects||[],loans=props.loans||[];
+  var months=props.months,year=props.year,month=props.month;
+  var potBalance=props.potBalance,projectBalance=props.projectBalance||function(p){return potBalance(p.id);};
+  var setTab=props.setTab;
+  var totalDep=totalFixed+totalVariable+totalExcep;
+  var monthName=MONTHS_FR[month]+" "+year;
+
+  // Patrimoine
+  var patrimoine=loadPatrimoine();
+  var nowY=new Date().getFullYear();
+  function actifVal(a){var v=a.valeur||0;if(a.type==="voiture"&&a.decote>0&&a.annee){var yrs=Math.max(0,nowY-a.annee);v=v*Math.pow(1-(a.decote||0)/100,yrs);}return v;}
+  var totalActifs=0,totalPassifs=0;
+  if(patrimoine&&patrimoine.actifs)totalActifs=patrimoine.actifs.reduce(function(s,a){return s+actifVal(a);},0);
+  if(patrimoine&&patrimoine.passifs)totalPassifs=patrimoine.passifs.reduce(function(s,p){return s+(p.montant||0);},0);
+  var totalPlacements=placementsTotal();
+  var totalCagnottes=pots.reduce(function(s,p){return s+potBalance(p.id);},0);
+  totalActifs=totalActifs+totalPlacements+totalCagnottes;
+  var patrimoineNet=totalActifs-totalPassifs;
+  var savingsRate=totalRevenus>0?Math.round(totalSaved/totalRevenus*100):0;
+  var precautionMonths=totalDep>0?totalCagnottes/totalDep:0;
+
+  var card={background:"var(--surface)",borderRadius:20,padding:20,boxShadow:"var(--shadow-card)",display:"flex",flexDirection:"column"};
+  var cardTitle={fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:14,display:"flex",alignItems:"center",gap:8};
+  var linkBtn={marginTop:"auto",alignSelf:"flex-start",background:"var(--surface-2)",border:"none",borderRadius:10,padding:"8px 12px",fontSize:12.5,fontWeight:700,color:"var(--text-2)",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5};
+  function kpiCard(label,value,valColor,sub,subColor){
+    return el("div",{style:{background:"var(--glass-bg)",borderRadius:18,padding:"16px 18px",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)",boxShadow:"var(--glass-shadow)"}},
+      el("div",{style:{fontSize:11.5,color:"var(--text-3)",fontWeight:600,marginBottom:6}},label),
+      el("div",{style:{fontSize:26,fontWeight:800,letterSpacing:"-0.5px",lineHeight:1.1,color:valColor}},value),
+      sub?el("div",{style:{fontSize:11.5,fontWeight:600,marginTop:5,color:subColor||"var(--text-3)"}},sub):null);
+  }
+  var epColor=savingsRate>=10?"#19A979":"#E8743B";
+  var precColor=precautionMonths>=3?"#19A979":"#E8743B";
+  var resteColor=nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
+
+  // Bloc Budget
+  function budgetCard(){
+    return el("div",{style:card},
+      el("div",{style:cardTitle},el(Icon,{name:"coins",size:15,color:"#19A979"}),"Budget de "+monthName),
+      el("div",{style:{display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}},
+        el("div",{style:{flex:"1 1 200px",minWidth:0}},
+          flowRow("coins","#19A979","Revenus","+ "+fmt(totalRevenus),"#19A979"),
+          flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
+          flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
+          flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF"),
+          totalSaved>0&&flowRow("piggy-bank","#1D8BCE","Épargné ce mois","− "+fmt(totalSaved),"#1D8BCE")),
+        (totalDep>0)&&el("div",{style:{flexShrink:0}},el(DonutChart,{totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep}))),
+      el("div",{style:{marginTop:16,padding:"14px 16px",borderRadius:14,background:"linear-gradient(135deg,"+resteColor+","+resteColor+"cc)",color:"#fff"}},
+        el("div",{style:{fontSize:12.5,fontWeight:600,opacity:.9}},nonAffecte>=0?"Non affecté":"Découvert prévu"),
+        el("div",{style:{fontSize:30,fontWeight:800,letterSpacing:"-1px"}},fmt(nonAffecte)),
+        el("div",{style:{fontSize:11.5,opacity:.85,marginTop:2}},"Disponible avant épargne : "+fmt(reste))),
+      el("button",{style:linkBtn,onClick:function(){setTab("budget");}},"Ouvrir le budget ",el(Icon,{name:"arrow-right",size:13})));
+  }
+
+  // Bloc Cagnottes
+  function cagnottesCard(){
+    return el("div",{style:card},
+      el("div",{style:cardTitle},el(Icon,{name:"piggy-bank",size:15,color:"#1D8BCE"}),"Cagnottes & épargne"),
+      el("div",{style:{fontSize:28,fontWeight:800,letterSpacing:"-0.5px",color:"#1D8BCE",marginBottom:2}},fmt(totalCagnottes)),
+      el("div",{style:{fontSize:12,color:"var(--text-3)",marginBottom:14}},"Total épargné · "+pots.length+" cagnotte"+(pots.length>1?"s":"")),
+      pots.length===0&&el("p",{style:{fontSize:13,color:"var(--text-3)"}},"Aucune cagnotte pour l'instant."),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:10}},pots.slice(0,6).map(function(p){
+        var bal=potBalance(p.id);
+        var pct=p.goal>0?Math.min(100,Math.round(bal/p.goal*100)):null;
+        return el("div",{key:p.id},
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}},
+            el("span",{style:{display:"flex",alignItems:"center",gap:6,color:"var(--text-2)"}},el("span",{style:{width:9,height:9,borderRadius:3,background:p.color,flexShrink:0}}),p.label),
+            el("span",{style:{fontWeight:700,color:p.color}},fmt(bal)+(p.goal>0?" / "+fmt(p.goal):""))),
+          pct!==null&&el("div",{style:{height:5,background:"var(--border-2)",borderRadius:3,overflow:"hidden"}},
+            el("div",{style:{height:"100%",width:pct+"%",background:p.color,borderRadius:3}})));
+      })),
+      el("button",{style:linkBtn,onClick:function(){setTab("epargne");}},"Gérer l'épargne ",el(Icon,{name:"arrow-right",size:13})));
+  }
+
+  // Bloc Remboursements
+  function loansCard(){
+    var active=loans.map(function(l){var r=loanRepaid(l.id,months);return {l:l,repaid:r,remaining:Math.max(0,l.total-r)};});
+    var enCours=active.filter(function(x){return x.remaining>0;});
+    return el("div",{style:card},
+      el("div",{style:cardTitle},el(Icon,{name:"repeat",size:15,color:"#945ECF"}),"Remboursements"),
+      loans.length===0&&el("p",{style:{fontSize:13,color:"var(--text-3)"}},"Aucun achat à rembourser."),
+      loans.length>0&&enCours.length===0&&el("p",{style:{fontSize:13,color:"#19A979",fontWeight:600}},"Tout est soldé 🎉"),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:12}},active.filter(function(x){return x.remaining>0;}).slice(0,5).map(function(x){
+        var l=x.l;var pct=l.total>0?Math.min(100,Math.round(x.repaid/l.total*100)):100;
+        return el("div",{key:l.id},
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}},
+            el("span",{style:{color:"var(--text-2)",fontWeight:600}},l.label),
+            el("span",{style:{fontWeight:700,color:"#945ECF"}},fmt(x.repaid)+" / "+fmt(l.total))),
+          el("div",{style:{height:5,background:"var(--border-2)",borderRadius:3,overflow:"hidden"}},
+            el("div",{style:{height:"100%",width:pct+"%",background:"#945ECF",borderRadius:3}})),
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:3}},"reste "+fmt(x.remaining)));
+      })),
+      el("button",{style:linkBtn,onClick:function(){setTab("epargne");}},"Voir les remboursements ",el(Icon,{name:"arrow-right",size:13})));
+  }
+
+  // Bloc Projets & patrimoine
+  function projetsCard(){
+    var top=projects.slice().sort(function(a,b){var pa=a.goal>0?projectBalance(a)/a.goal:0;var pb=b.goal>0?projectBalance(b)/b.goal:0;return pb-pa;}).slice(0,4);
+    return el("div",{style:card},
+      el("div",{style:cardTitle},el(Icon,{name:"target",size:15,color:"#E8743B"}),"Projets & patrimoine"),
+      el("div",{style:{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}},
+        el("div",{style:{flex:"1 1 120px",background:"var(--surface-2)",borderRadius:12,padding:"10px 12px"}},
+          el("div",{style:{fontSize:11,color:"var(--text-3)"}},"Patrimoine net"),
+          el("div",{style:{fontSize:20,fontWeight:800,color:patrimoineNet>=0?"#19A979":"#C8516C"}},fmt(patrimoineNet))),
+        el("div",{style:{flex:"1 1 120px",background:"var(--surface-2)",borderRadius:12,padding:"10px 12px"}},
+          el("div",{style:{fontSize:11,color:"var(--text-3)"}},"Placements"),
+          el("div",{style:{fontSize:20,fontWeight:800,color:"var(--text)"}},fmt(totalPlacements)))),
+      projects.length===0&&el("p",{style:{fontSize:13,color:"var(--text-3)"}},"Aucun projet défini."),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:12}},top.map(function(p){
+        var bal=projectBalance(p);var pct=p.goal>0?Math.min(100,Math.round(bal/p.goal*100)):0;
+        return el("div",{key:p.id},
+          el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}},
+            el("span",{style:{color:"var(--text-2)",fontWeight:600}},p.label),
+            el("span",{style:{fontWeight:700,color:"#E8743B"}},fmt(bal)+(p.goal>0?" / "+fmt(p.goal):""))),
+          p.goal>0&&el("div",{style:{height:5,background:"var(--border-2)",borderRadius:3,overflow:"hidden"}},
+            el("div",{style:{height:"100%",width:pct+"%",background:"#E8743B",borderRadius:3}})));
+      })),
+      el("button",{style:linkBtn,onClick:function(){setTab("epargne");}},"Voir projets ",el(Icon,{name:"arrow-right",size:13})));
+  }
+
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+    el("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}},
+      kpiCard("Taux d'épargne",savingsRate+" %",epColor,"ce mois"),
+      kpiCard("Patrimoine net",fmt(patrimoineNet),patrimoineNet>=0?"#19A979":"#C8516C","actifs − passifs"),
+      kpiCard("Épargne de précaution",totalDep>0?(precautionMonths.toFixed(1).replace(".",",")+" mois"):"—",precColor,precautionMonths>=3?"confortable":"à renforcer",precColor),
+      kpiCard("Reste à vivre",fmt(nonAffecte),resteColor,"non affecté")),
+    el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
+      budgetCard(),cagnottesCard(),loansCard(),projetsCard()));
 }
 
 // ---- Tableau de bord ----
