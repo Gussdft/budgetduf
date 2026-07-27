@@ -1036,10 +1036,27 @@ function App(){
   if(!loaded) return el("div",{style:{...S.app,alignItems:"center",justifyContent:"center",color:"var(--text-3)"}},"Synchronisation…");
   const restColor = nonAffecte>0?"#19A979":nonAffecte<0?"#C8516C":"#6C8893";
 
-  var appStyle=(isWide&&tab==="accueil")?Object.assign({},S.app,{maxWidth:1180}):S.app;
+  var navItems=[["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]];
+  var appStyle=isWide?S.appWide:S.app;
   return el("div",{style:appStyle},
-    // header
-    el("header",{style:S.header},
+    // ---- Barre latérale (interface web PC) ----
+    isWide && el("aside",{style:S.sidebar},
+      el("div",{style:{display:"flex",alignItems:"center",gap:11,padding:"2px 8px 20px"}},
+        el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
+        el("div",null,
+          el("div",{style:{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}},"Budget du foyer"),
+          el("div",{style:{fontSize:11,color:"var(--text-3)"}},"Gestion du foyer"))),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:4}},navItems.map(function(t){
+        var on=tab===t[0];
+        return el("button",{key:t[0],style:Object.assign({},S.sideItem,on?S.sideItemOn:{}),onClick:function(){setTab(t[0]);}},
+          el(Icon,{name:t[1],size:19,color:on?"#1D8BCE":"var(--text-3)"}),t[2]);
+      })),
+      el("div",{style:{marginTop:"auto",display:"flex",flexDirection:"column",gap:4,paddingTop:16,borderTop:"1px solid var(--border-2)"}},
+        el("button",{style:S.sideItem,onClick:cycleTheme},el(Icon,{name:theme==="sombre"?"moon":theme==="clair"?"sun":"contrast",size:18,color:"var(--text-3)"}),"Thème : "+(theme==="auto"?"auto":theme)),
+        db&&el("button",{style:S.sideItem,onClick:function(){if(db)db.auth.signOut();}},el(Icon,{name:"log-out",size:18,color:"var(--text-3)"}),"Déconnexion"))),
+
+    // header (mobile uniquement)
+    !isWide && el("header",{style:S.header},
       el("div",{style:{display:"flex",alignItems:"center",gap:12}},
         el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
         el("div",null,
@@ -1047,7 +1064,7 @@ function App(){
           el("p",{style:S.subtitle},"Revenus − dépenses → épargne")))),
 
     // month nav (masqué sur Outils et Réglages — pas pertinent)
-    (tab!=="outils"&&tab!=="reglages") && el("div",{style:S.monthNav},
+    (tab!=="outils"&&tab!=="reglages") && el("div",{style:isWide?Object.assign({},S.monthNav,{justifyContent:"flex-start",gap:16}):S.monthNav},
       el("button",{style:S.navBtn,onClick:()=>changeMonth(-1)},el(Icon,{name:"chevron-left",size:20})),
       el("span",{style:S.monthLabel},`${MONTHS_FR[month]} ${year}`),
       el("button",{style:S.navBtn,onClick:()=>changeMonth(1)},el(Icon,{name:"chevron-right",size:20}))),
@@ -1061,8 +1078,8 @@ function App(){
       : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab})),
 
     // ---- TAB BUDGET ----
-    tab==="budget" && el(React.Fragment,null,
-      (function(){
+    tab==="budget" && (function(){
+    var reminderEl=(function(){
         var active=(loans||[]).map(function(l){var repaid=loanRepaid(l.id,months);return {l:l,remaining:Math.max(0,l.total-repaid)};}).filter(function(x){return x.remaining>0;});
         if(active.length===0) return null;
         var totalRemaining=active.reduce(function(s,x){return s+x.remaining;},0);
@@ -1073,8 +1090,8 @@ function App(){
             el("div",{style:{fontSize:11.5,color:"var(--text-2)",marginTop:3,lineHeight:1.5}},
               "Il te reste "+fmt(totalRemaining)+" à te rembourser : "+active.map(function(x){return x.l.label+" ("+fmt(x.remaining)+")";}).join(", ")+". Prévois une part de ton budget ce mois-ci."),
             el("button",{style:{marginTop:8,background:"#945ECF",color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer"},onClick:function(){setTab("epargne");}},"Voir mes remboursements →")));
-      })(),
-      el("div",{style:S.flowCard},
+      })();
+    var summaryEl=el("div",{style:S.flowCard},
         flowRow("coins","#19A979","Revenus","+ "+fmt(totalRevenus),"#19A979"),
         (potCovFixed+potCovVariable+potCovExcep>0)?el(React.Fragment,null,
           potCovFixed>0&&flowRow("house","#E8743B","Fixes","− "+fmt(totalFixed-potCovFixed)+" net","#E8743B"),
@@ -1110,9 +1127,8 @@ function App(){
           el("div",{style:S.resteVal},fmt(nonAffecte)),
           el("div",{style:S.resteFoot},`Disponible avant épargne : ${fmt(reste)}`),
           (nonAffecte>0 && pots.length>0) && el("button",{style:S.allocateBtn,onClick:()=>setModal({kind:"allocate"})},
-            el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes"))),
-
-      el("div",{style:S.actionRow},
+            el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes")));
+    var actionsEl=el("div",{style:S.actionRow},
         el("button",{style:S.copyBtn,onClick:function(){
           var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
           if(hasData){setModal({kind:"confirmaction",title:"Recopier le mois précédent",message:"Cela va remplacer les lignes du mois en cours. Continue ?",onConfirm:function(){withSnapshot("Mois précédent annulé",copyPrev);}});}
@@ -1124,13 +1140,21 @@ function App(){
           else{fillAverage();}
         }},el(Icon,{name:"bar-chart",size:14,color:"#945ECF"})," Moyenne 3 mois"),
         el("button",{style:S.resetBtn,onClick:function(){setModal({kind:"confirmaction",title:"Réinitialiser le mois",message:"Supprimer toutes les lignes et versements de ce mois ?",onConfirm:function(){withSnapshot("Réinitialisation annulée",resetMonth);}});}},
-          "Réinitialiser")),
-      el("button",{style:Object.assign({},S.copyBtn,{color:"#19A979",borderColor:"#19A97944",background:"#19A97910",justifyContent:"center"}),onClick:function(){setModal({kind:"import"});}},
-        el(Icon,{name:"upload",size:14,color:"#19A979"})," Importer depuis l'appli bancaire"),
-
-      Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
+          "Réinitialiser"));
+    var importEl=el("button",{style:Object.assign({},S.copyBtn,{color:"#19A979",borderColor:"#19A97944",background:"#19A97910",justifyContent:"center"}),onClick:function(){setModal({kind:"import"});}},
+        el(Icon,{name:"upload",size:14,color:"#19A979"})," Importer depuis l'appli bancaire");
+    var blocksEls=Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
-        onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}))),
+        onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}));
+    if(isWide){
+      return el("div",{style:{display:"grid",gridTemplateColumns:"minmax(0,1.7fr) minmax(0,1fr)",gap:20,alignItems:"start"}},
+        el("div",{style:{display:"flex",flexDirection:"column",gap:14,minWidth:0}},
+          actionsEl,importEl,
+          el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}},blocksEls)),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}},reminderEl,summaryEl));
+    }
+    return el(React.Fragment,null,reminderEl,summaryEl,actionsEl,importEl,blocksEls);
+    })(),
 
     // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(EpargnePanel,{
@@ -1158,9 +1182,9 @@ function App(){
     })
     ), // fin du panneau d'onglet
 
-    // ---- barre d'onglets en bas (style iOS) ----
-    el("nav",{style:isWide?Object.assign({},S.tabBar,{left:"50%",right:"auto",transform:"translateX(-50%)",width:520,maxWidth:"calc(100% - 32px)"}):S.tabBar},
-      [["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]].map(function(t){
+    // ---- barre d'onglets en bas (mobile uniquement ; PC = barre latérale) ----
+    !isWide && el("nav",{style:S.tabBar},
+      navItems.map(function(t){
         var id=t[0],icon=t[1],label=t[2];var on=tab===id;
         return el("button",{key:id,style:Object.assign({},S.tabBtn,on?{color:"#1D8BCE"}:{}),onClick:function(){setTab(id);}},
           el("span",{style:{display:"flex",transform:on?"scale(1.04)":"none",transition:"transform .2s cubic-bezier(.22,.61,.36,1)"}},
@@ -4246,6 +4270,10 @@ function DashboardScreen(props){
 // ----------------------------------------------------------------------------
 const S = {
   app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"var(--bg-gradient)"},
+  appWide:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:16,padding:"28px 40px 60px 288px",maxWidth:1280,margin:"0 auto",color:"var(--text)",background:"var(--bg-gradient)"},
+  sidebar:{position:"fixed",left:0,top:0,bottom:0,width:248,zIndex:95,display:"flex",flexDirection:"column",padding:"22px 16px",background:"var(--glass-bg-strong)",WebkitBackdropFilter:"blur(30px) saturate(180%)",backdropFilter:"blur(30px) saturate(180%)",borderRight:"1px solid var(--glass-border)"},
+  sideItem:{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",borderRadius:13,border:"none",background:"transparent",color:"var(--text-3)",fontSize:14.5,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all .15s"},
+  sideItemOn:{background:"#1D8BCE18",color:"#1D8BCE"},
   header:{display:"flex",alignItems:"center",justifyContent:"space-between"},
   logo:{width:42,height:42,borderRadius:13,background:"linear-gradient(135deg,#1D8BCE,#19A979)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(29,139,206,.35)"},
   title:{margin:0,fontSize:26,fontWeight:800,letterSpacing:"-0.6px"},
