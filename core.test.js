@@ -125,5 +125,27 @@ group("Entrées vides / manquantes");
   eq(Core.potBalance([], {}, "z"), 0, "cagnotte inconnue → 0");
 })();
 
+// ---------- prévision de trésorerie ----------
+group("Flux net moyen mensuel (mois saisis seulement)");
+(function(){
+  var months = {
+    "2026-06":{revenus:[{amount:3000}],fixed:[{amount:2000}]},      // reste 1000
+    "2026-07":{revenus:[{amount:3000}],fixed:[{amount:2400}]},      // reste 600
+    "2026-08":{}                                                     // mois vide → ignoré
+  };
+  eq(Core.avgMonthlyNet(months), 800, "moyenne de 1000 et 600");
+  eq(Core.avgMonthlyNet({}), 0, "aucun mois → 0");
+})();
+
+group("Projection de trésorerie");
+(function(){
+  var f = Core.forecast(5000, 800, 6);
+  eq(f.length, 7, "mois 0 → 6");
+  eq(f[0].balance, 5000, "départ = maintenant");
+  eq(f[6].balance, 9800, "5000 + 6×800");
+  var down = Core.forecast(1000, -400, 3);
+  eq(down[3].balance, -200, "flux négatif → passe sous zéro");
+})();
+
 console.log("\n" + (failed === 0 ? "✓ TOUS LES TESTS PASSENT" : "✗ ÉCHECS") + " — " + passed + " ok, " + failed + " ko\n");
 if(typeof process !== "undefined"){ process.exit(failed === 0 ? 0 : 1); }
