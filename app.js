@@ -765,29 +765,30 @@ function App(){
   },[loaded]);
   useEffect(function(){
     if(!db) return;
+    // Filet de sécurité : si une requête réseau ne répond jamais, on débloque l'écran au bout de 8 s
+    var safety=setTimeout(function(){ setAuthReady(true); },8000);
+    // On récupère le foyer de l'utilisateur ; quoi qu'il arrive, on débloque l'écran (jamais coincé sur « Chargement… »)
+    var loadHousehold=function(userId){
+      db.from("user_households").select("household_id, households(invite_code)")
+        .eq("user_id",userId).single()
+        .then(function(hr){
+          if(hr&&hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
+          setAuthReady(true);
+        })
+        .catch(function(e){ console.error("Chargement foyer échoué",e); setAuthReady(true); });
+    };
     db.auth.getSession().then(function(res){
-      var sess=res.data&&res.data.session;
-      if(sess&&sess.user){
-        setUser(sess.user);
-        db.from("user_households").select("household_id, households(invite_code)")
-          .eq("user_id",sess.user.id).single().then(function(hr){
-            if(hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
-            setAuthReady(true);
-          });
-      } else { setAuthReady(true); }
-    });
+      var sess=res&&res.data&&res.data.session;
+      if(sess&&sess.user){ setUser(sess.user); loadHousehold(sess.user.id); }
+      else { setAuthReady(true); }
+    }).catch(function(e){ console.error("getSession échoué",e); setAuthReady(true); });
     var sub=db.auth.onAuthStateChange(function(event,sess){
-      if(event==="SIGNED_OUT"){setUser(null);setHouseholdId(null);setHouseholdCode("");setLoaded(false);}
+      if(event==="SIGNED_OUT"){setUser(null);setHouseholdId(null);setHouseholdCode("");setLoaded(false);setAuthReady(true);}
       if((event==="SIGNED_IN"||event==="TOKEN_REFRESHED")&&sess&&sess.user){
-        setUser(sess.user);
-        db.from("user_households").select("household_id, households(invite_code)")
-          .eq("user_id",sess.user.id).single().then(function(hr){
-            if(hr.data){setHouseholdId(hr.data.household_id);setHouseholdCode((hr.data.households&&hr.data.households.invite_code)||"");}
-            setAuthReady(true);
-          });
+        setUser(sess.user); loadHousehold(sess.user.id);
       }
     });
-    return function(){if(sub.data&&sub.data.subscription)sub.data.subscription.unsubscribe();};
+    return function(){clearTimeout(safety);if(sub&&sub.data&&sub.data.subscription)sub.data.subscription.unsubscribe();};
   },[]);
   useEffect(function(){
     if(!householdId||!db) return;
@@ -807,7 +808,7 @@ function App(){
       }
       syncingRef.current=false;
       setLoaded(true);
-    });
+    }).catch(function(e){ console.error("Chargement des données échoué",e); syncingRef.current=false; setLoaded(true); });
   },[householdId]);
   useEffect(function(){
     if(!householdId||!db) return;
@@ -4351,4 +4352,24 @@ const S = {
   smallBtn:{display:"flex",alignItems:"center",gap:4,border:"none",borderRadius:9,padding:"6px 12px",fontSize:13,fontWeight:600,cursor:"pointer"},
 };
 
-ReactDOM.createRoot(document.getElementById("root")).render(el(App));
+// ---- Garde-fou global : jamais d'écran blanc, on propose de recharger ----
+var Boundary=function(_React){
+  function B(p){ _React.Component.call(this,p); this.state={err:null}; }
+  B.prototype=Object.create(_React.Component.prototype);
+  B.prototype.constructor=B;
+  B.getDerivedStateFromError=function(err){ return {err:err}; };
+  B.prototype.componentDidCatch=function(err,info){ try{console.error("Erreur app",err,info);}catch(e){} };
+  B.prototype.render=function(){
+    if(this.state.err){
+      return el("div",{style:{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:24,textAlign:"center",fontFamily:"-apple-system,system-ui,sans-serif",background:"#0E1512",color:"#E9EFEB"}},
+        el("div",{style:{fontSize:44}},"🐷"),
+        el("h1",{style:{fontSize:20,fontWeight:800,margin:0}},"Oups, un petit couac"),
+        el("p",{style:{fontSize:14,color:"#9EAEA5",maxWidth:340,margin:"0 0 6px",lineHeight:1.5}},"L'application a rencontré une erreur inattendue. Tes données sont en sécurité. Recharge la page pour repartir."),
+        el("button",{onClick:function(){try{window.location.reload();}catch(e){}},style:{border:"none",borderRadius:12,padding:"12px 22px",fontSize:15,fontWeight:700,cursor:"pointer",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff"}},"Recharger l'application"));
+    }
+    return this.props.children;
+  };
+  return B;
+}(React);
+
+ReactDOM.createRoot(document.getElementById("root")).render(el(Boundary,null,el(App)));
