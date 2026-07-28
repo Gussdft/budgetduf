@@ -175,5 +175,54 @@ group("Bilan : dépense non catégorisée + couverture cagnotte");
   eq(b.byCategory.__none, 50, "ligne sans catégorie → __none");
 })();
 
+// ---------- équilibre du couple ----------
+group("Couple — prorata des revenus, qui doit combien");
+(function(){
+  // A gagne 2000, B gagne 3000 → ratio 40/60. Charges communes 1000, toutes payées par A.
+  var data = {
+    revenus:[{amount:2000,who:"a"},{amount:3000,who:"b"}],
+    fixed:[{amount:1000,paidBy:"a"}]
+  };
+  var r = Core.coupleBalance(data, {rule:"prorata"});
+  eq(r.ratioA, 0.4, "ratio A = 40 %");
+  eq(r.shareA, 400, "part de A = 400");
+  eq(r.shareB, 600, "part de B = 600");
+  eq(r.paidA, 1000, "A a tout payé");
+  eq(r.owes.from, "b", "B doit à A");
+  eq(r.owes.to, "a", "…à A");
+  eq(r.owes.amount, 600, "B doit 600 à A");
+})();
+
+group("Couple — partage égal 50/50");
+(function(){
+  var data = {
+    revenus:[{amount:2000,who:"a"},{amount:3000,who:"b"}],
+    fixed:[{amount:800,paidBy:"a"},{amount:200,paidBy:"b"}]
+  };
+  var r = Core.coupleBalance(data, {rule:"egal"});
+  eq(r.shareA, 500, "part A = 500 (50 %)");
+  eq(r.paidA, 800, "A a payé 800");
+  eq(r.owes.from, "b", "B doit à A");
+  eq(r.owes.amount, 300, "B doit 300 à A (800-500)");
+})();
+
+group("Couple — dépense perso exclue, ligne sans payeur ignorée");
+(function(){
+  var data = {
+    revenus:[{amount:2500,who:"a"},{amount:2500,who:"b"}],
+    fixed:[{amount:1000,paidBy:"a"},{amount:500,scope:"b",paidBy:"b"},{amount:300}]
+  };
+  var r = Core.coupleBalance(data, {rule:"prorata"});
+  eq(r.total, 1000, "seule la charge commune avec payeur compte");
+  eq(r.owes.amount, 500, "B doit 500 à A (part 500, payé 0)");
+})();
+
+group("Couple — équilibré = personne ne doit rien");
+(function(){
+  var data = { revenus:[{amount:2500,who:"a"},{amount:2500,who:"b"}], fixed:[{amount:500,paidBy:"a"},{amount:500,paidBy:"b"}] };
+  var r = Core.coupleBalance(data, {rule:"egal"});
+  eq(r.owes, null, "comptes équilibrés");
+})();
+
 console.log("\n" + (failed === 0 ? "✓ TOUS LES TESTS PASSENT" : "✗ ÉCHECS") + " — " + passed + " ok, " + failed + " ko\n");
 if(typeof process !== "undefined"){ process.exit(failed === 0 ? 0 : 1); }

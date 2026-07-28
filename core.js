@@ -163,6 +163,53 @@
     return {year:year, revenus:revenus, depenses:depenses, epargne:epargne, byMonth:byMonth, byCategory:byCat};
   }
 
+  // Équilibre du couple sur un mois : revenus de chacun, part équitable des charges
+  // communes, ce que chacun a payé, et le solde (« qui doit combien à qui »).
+  //  - couple.rule : "egal" (50/50) ou "prorata" (au prorata des revenus)
+  //  - ligne de revenu : who = "a" | "b" (sinon revenu commun, hors ratio)
+  //  - ligne de dépense : scope = "a" | "b" pour une dépense perso (exclue du partage),
+  //    sinon commune ; paidBy = "a" | "b" (qui a avancé l'argent — sinon hors règlement)
+  function coupleBalance(data, couple){
+    data = data || {};
+    couple = couple || {};
+    var rule = couple.rule || "prorata";
+    var incomeA = 0, incomeB = 0;
+    var rv = data.revenus || [];
+    for(var i=0;i<rv.length;i++){
+      var r = rv[i];
+      if(r.fromPot) continue;
+      if(r.who === "a") incomeA += r.amount || 0;
+      else if(r.who === "b") incomeB += r.amount || 0;
+    }
+    var ratioA, ratioB;
+    if(rule === "egal"){ ratioA = 0.5; ratioB = 0.5; }
+    else if(incomeA + incomeB > 0){ ratioA = incomeA/(incomeA+incomeB); ratioB = 1 - ratioA; }
+    else { ratioA = 0.5; ratioB = 0.5; }
+    var total = 0, paidA = 0, paidB = 0;
+    var cats = ["fixed","variable","excep"];
+    for(var c=0;c<cats.length;c++){
+      var arr = data[cats[c]] || [];
+      for(var j=0;j<arr.length;j++){
+        var line = arr[j];
+        if(line.scope === "a" || line.scope === "b") continue;   // dépense perso : hors partage
+        if(line.paidBy !== "a" && line.paidBy !== "b") continue;  // pas de payeur : hors règlement
+        var net = lineNet(line);
+        total += net;
+        if(line.paidBy === "a") paidA += net; else paidB += net;
+      }
+    }
+    var shareA = total * ratioA, shareB = total * ratioB;
+    var balanceA = paidA - shareA, balanceB = paidB - shareB;
+    var owes = null;
+    if(balanceA > 0.005) owes = {from:"b", to:"a", amount:balanceA};
+    else if(balanceB > 0.005) owes = {from:"a", to:"b", amount:balanceB};
+    return {
+      incomeA:incomeA, incomeB:incomeB, ratioA:ratioA, ratioB:ratioB,
+      total:total, paidA:paidA, paidB:paidB, shareA:shareA, shareB:shareB,
+      balanceA:balanceA, balanceB:balanceB, owes:owes
+    };
+  }
+
   var Core = {
     sumAmounts: sumAmounts,
     potCovered: potCovered,
@@ -174,7 +221,8 @@
     avgMonthlyNet: avgMonthlyNet,
     forecast: forecast,
     lineNet: lineNet,
-    annualSummary: annualSummary
+    annualSummary: annualSummary,
+    coupleBalance: coupleBalance
   };
 
   if(typeof module !== "undefined" && module.exports){ module.exports = Core; }
