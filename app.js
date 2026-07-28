@@ -1131,13 +1131,17 @@ function App(){
           db&&el("button",{style:S.sideItem,onClick:function(){if(db)db.auth.signOut();}},el(Icon,{name:"log-out",size:18,color:"var(--text-3)"}),"Déconnexion")));
     })(),
 
-    // header (mobile uniquement)
-    !isWide && el("header",{style:S.header},
-      el("div",{style:{display:"flex",alignItems:"center",gap:12}},
-        el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
-        el("div",null,
-          el("h1",{style:S.title},"Budget du foyer"),
-          el("p",{style:S.subtitle},"Revenus − dépenses → épargne")))),
+    // header (mobile uniquement) — titre contextuel selon la section
+    !isWide && (function(){
+      var titles={accueil:["Budget du foyer","Revenus − dépenses → épargne"],budget:["Budget","Ce que tu gagnes et dépenses ce mois"],epargne:["Épargne & patrimoine","Cagnottes, projets, remboursements"],outils:["Simulateurs & placements","Impôts, prêt, patrimoine, invest."],reglages:["Réglages","Foyer, catégories, thème"]};
+      var t=titles[tab]||titles.accueil;
+      return el("header",{style:S.header},
+        el("div",{style:{display:"flex",alignItems:"center",gap:12}},
+          el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
+          el("div",null,
+            el("h1",{style:S.title},t[0]),
+            el("p",{style:S.subtitle},t[1]))));
+    })(),
 
     // month nav (masqué sur Outils et Réglages — pas pertinent)
     (tab!=="outils"&&tab!=="reglages") && el("div",{style:isWide?Object.assign({},S.monthNav,{justifyContent:"flex-start",gap:16}):S.monthNav},
