@@ -1226,11 +1226,11 @@ function App(){
         onCat:kind!=="revenus"?function(id){setModal({kind:"catpick",lineKind:kind,lineId:id});}:null,
         onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}));
     if(isWide){
-      return el("div",{style:{display:"grid",gridTemplateColumns:"minmax(0,1.7fr) minmax(0,1fr)",gap:20,alignItems:"start"}},
-        el("div",{style:{display:"flex",flexDirection:"column",gap:14,minWidth:0}},
+      return el("div",{style:{display:"flex",gap:20,alignItems:"flex-start"}},
+        el("div",{style:{flex:"1 1 auto",minWidth:0,display:"flex",flexDirection:"column",gap:14}},
           actionsEl,importEl,
-          el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}},blocksEls)),
-        el("div",{style:{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}},reminderEl,summaryEl));
+          el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start"}},blocksEls)),
+        el("div",{style:{flex:"0 0 330px",minWidth:0,position:"sticky",top:20,display:"flex",flexDirection:"column",gap:14}},reminderEl,summaryEl));
     }
     return el(React.Fragment,null,reminderEl,summaryEl,actionsEl,importEl,blocksEls);
     })(),
