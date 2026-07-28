@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v60";
+const APP_VERSION = "v61";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -963,6 +963,10 @@ function App(){
   const setLineCat=function(kind,id,catId){setMonthData(function(c){return Object.assign({},c,{[kind]:(c[kind]||[]).map(function(x){return x.id===id?Object.assign({},x,{cat:catId||undefined}):x;})});});};
   // Affecter un champ couple à une ligne (who pour un revenu, paidBy pour une dépense)
   const setLineField=function(kind,id,field,val){setMonthData(function(c){var u={};u[field]=val||undefined;return Object.assign({},c,{[kind]:(c[kind]||[]).map(function(x){return x.id===id?Object.assign({},x,u):x;})});});};
+  // ---- Mes victoires : objectifs du mois à cocher ----
+  const addVictory=function(label){setMonthData(function(c){return Object.assign({},c,{victories:[...(c.victories||[]),{id:uid(),label:label,done:false}]});});};
+  const toggleVictory=function(id){setMonthData(function(c){return Object.assign({},c,{victories:(c.victories||[]).map(function(v){return v.id===id?Object.assign({},v,{done:!v.done}):v;})});});};
+  const delVictory=function(id){setMonthData(function(c){return Object.assign({},c,{victories:(c.victories||[]).filter(function(v){return v.id!==id;})});});};
   // Rembourser une dette : versement libre (montant variable) dans une cagnotte, tagué au prêt.
   // Compte comme de l'épargne du mois (réduit le non-affecté, reconstitue la cagnotte).
   // entries = [{potId, amount}] : un remboursement peut être réparti sur plusieurs cagnottes à la fois
@@ -1155,8 +1159,8 @@ function App(){
 
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
-      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null})
-      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},monthName:MONTHS_FR[month]+" "+year})),
+      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},monthName:MONTHS_FR[month]+" "+year,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && (function(){
@@ -4257,6 +4261,28 @@ function CoupleBalanceScreen({data,couple,monthLabel,onClose}){
         "Renseigne « à qui » sur chaque revenu et « qui a payé » sur chaque dépense (puces sous les lignes du budget). Seules les charges communes avec un payeur entrent dans le calcul ; les dépenses perso et les lignes sans payeur sont ignorées.")));
 }
 
+// ---- Mes victoires : objectifs du mois à cocher ----
+function VictoriesCard(props){
+  var victories=props.victories||[];
+  var [txt,setTxt]=useState("");
+  var done=victories.filter(function(v){return v.done;}).length;
+  var add=function(){ if(!txt.trim())return; props.onAdd(txt.trim()); setTxt(""); };
+  return el("div",{style:{background:"var(--surface)",borderRadius:20,padding:18,boxShadow:"var(--shadow-card)"}},
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}},
+      el("span",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"check",size:15,color:"#19A979"}),"Mes victoires"),
+      el("span",{style:{fontSize:13,fontWeight:700,color:done>0?"#19A979":"var(--text-3)"}},done+" / "+victories.length)),
+    el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginBottom:12}},"Note ce que tu veux accomplir ce mois, puis coche chaque réussite — même les plus petites."),
+    el("div",{style:{display:"flex",gap:8,marginBottom:victories.length?12:0}},
+      el("input",{value:txt,placeholder:"ex : Mettre 200 € de côté",style:Object.assign({},S.input,{padding:"10px 12px"}),onChange:function(e){setTxt(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")add();}}),
+      txt.trim()&&el("button",{onClick:add,style:{border:"none",borderRadius:11,padding:"0 16px",background:"#19A979",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}},"Ajouter")),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:7}},victories.map(function(v){
+      return el("div",{key:v.id,style:{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:11,background:v.done?"#19A97910":"var(--surface-2)"}},
+        el("button",{onClick:function(){props.onToggle(v.id);},style:{width:22,height:22,borderRadius:7,flexShrink:0,cursor:"pointer",border:v.done?"none":"1.5px solid var(--border-3)",background:v.done?"#19A979":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}},v.done&&el(Icon,{name:"check",size:14,color:"#fff"})),
+        el("span",{style:{flex:1,fontSize:13.5,color:"var(--text)",textDecoration:v.done?"line-through":"none",opacity:v.done?.6:1}},v.label),
+        el("button",{onClick:function(){props.onDel(v.id);},style:{border:"none",background:"transparent",color:"var(--del)",cursor:"pointer",padding:2,display:"flex"}},el(Icon,{name:"x",size:15})));
+    })));
+}
+
 // ---- Prévision de trésorerie (épargne projetée sur les mois à venir) ----
 function ForecastCard(props){
   var startBalance=props.startBalance||0;
@@ -4437,6 +4463,7 @@ function DesktopDashboard(props){
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       budgetCard(),cagnottesCard(),loansCard(),projetsCard()),
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}),
+    props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
       el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
@@ -4539,6 +4566,7 @@ function DashboardScreen(props){
 
     // --- Prévision de trésorerie ---
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
+    props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:20,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
       el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
