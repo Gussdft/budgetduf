@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v70";
+const APP_VERSION = "v71";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -2279,6 +2279,44 @@ function parseTransactions(text){
   return results;
 }
 
+// Charge pdf.js à la demande (uniquement quand on importe un PDF)
+var _pdfjsP=null;
+function ensurePdfjs(){
+  if(typeof window!=="undefined"&&window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(_pdfjsP) return _pdfjsP;
+  _pdfjsP=new Promise(function(res,rej){
+    var s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+    s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; res(window.pdfjsLib); }catch(e){ rej(e); } };
+    s.onerror=function(){ rej(new Error("Chargement de pdf.js impossible (connexion ?)")); };
+    document.head.appendChild(s);
+  });
+  return _pdfjsP;
+}
+// Extrait le texte d'un PDF en reconstituant les lignes par position verticale
+function extractPdfText(file){
+  var lib;
+  var readBuf=function(){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(new Uint8Array(r.result)); }; r.onerror=function(){ rej(new Error("Lecture du fichier impossible")); }; r.readAsArrayBuffer(file); }); };
+  return ensurePdfjs().then(function(l){ lib=l; return readBuf(); }).then(function(buf){
+    return lib.getDocument({data:buf}).promise;
+  }).then(function(pdf){
+    var nums=[]; for(var i=1;i<=pdf.numPages;i++) nums.push(i);
+    return nums.reduce(function(acc,n){
+      return acc.then(function(txt){
+        return pdf.getPage(n).then(function(page){ return page.getTextContent(); }).then(function(tc){
+          var rows={};
+          tc.items.forEach(function(it){ var y=Math.round(it.transform[5]); if(!rows[y])rows[y]=[]; rows[y].push(it); });
+          Object.keys(rows).map(Number).sort(function(a,b){return b-a;}).forEach(function(y){
+            var line=rows[y].sort(function(a,b){return a.transform[4]-b.transform[4];}).map(function(i){return i.str;}).join(" ");
+            txt+=line+"\n";
+          });
+          return txt;
+        });
+      });
+    }, Promise.resolve(""));
+  });
+}
+
 // Normalise un libellé pour la comparaison (minuscules, sans accents/ponctuation)
 function normLabel(s){
   return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
@@ -2309,6 +2347,7 @@ function ImportModal(props){
   var [step,setStep]=useState(initText?2:1);
   var [text,setText]=useState(initText);
   var [mode,setMode]=useState(lines.length>0?"reel":"add"); // reel = comparer au prévu, add = nouvelles dépenses
+  var [pdfBusy,setPdfBusy]=useState(false);
   var enrich=function(list){ return list.map(function(t){var m=bestLineMatch(t.label,lines);return Object.assign({},t,{matchId:m?m.id:""});}); };
   var [txs,setTxs]=useState(function(){ return initText?enrich(parseTransactions(initText)):[]; });
   var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"]];
@@ -2333,11 +2372,25 @@ function ImportModal(props){
   var matchedCount=selected.filter(function(t){return t.matchId;}).length;
   var lineName=function(id){var l=lines.find(function(x){return x.id===id;});return l?l.label:"";};
 
+  function onPdf(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    setPdfBusy(true);
+    extractPdfText(f).then(function(txt){
+      setPdfBusy(false);
+      setText(txt);
+      var parsed=parseTransactions(txt);
+      if(parsed.length===0){ alert("PDF lu, mais aucune opération détectée automatiquement. Le texte est chargé — vérifie/ajuste puis Analyse."); return; }
+      setTxs(enrich(parsed)); setStep(2);
+    }).catch(function(err){ setPdfBusy(false); alert("Impossible de lire ce PDF. Essaie le copier-coller du texte à la place."); });
+  }
   if(step===1) return el(Modal,{title:"📋 Importer mon relevé",onClose:onClose},
-    el("p",{style:{fontSize:13,color:"var(--text-2)",marginBottom:8,lineHeight:1.5}},
-      "Ouvre ton relevé (ou ton appli bancaire), ",el("strong",null,"sélectionne les opérations"),", copie-les et colle ici. L'appli les rapproche automatiquement de tes lignes de budget."),
-    el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginBottom:12,lineHeight:1.5}},
-      "Astuce : sur un PDF, ouvre-le, Sélectionner tout, Copier, puis colle ici (le collage direct du texte est bien plus fiable que la lecture du PDF)."),
+    el("p",{style:{fontSize:13,color:"var(--text-2)",marginBottom:12,lineHeight:1.5}},
+      "Envoie ton relevé en PDF — l'appli lit les opérations et les rapproche automatiquement de tes lignes de budget."),
+    el("label",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:9,width:"100%",padding:"16px",borderRadius:14,border:"1.5px dashed var(--brand)",background:"var(--brand-soft)",color:"var(--brand)",fontSize:14.5,fontWeight:700,cursor:pdfBusy?"wait":"pointer",marginBottom:14}},
+      el(Icon,{name:"upload",size:18,color:"var(--brand)"}),
+      pdfBusy?"Lecture du PDF…":"Choisir un relevé PDF",
+      el("input",{type:"file",accept:"application/pdf,.pdf",disabled:pdfBusy,onChange:onPdf,style:{display:"none"}})),
+    el("div",{style:{textAlign:"center",fontSize:12,color:"var(--text-4)",margin:"0 0 12px"}},"ou colle le texte des opérations"),
     el("textarea",{
       style:{width:"100%",minHeight:160,padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border-3)",background:"var(--field-bg)",color:"var(--text)",fontSize:13,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none"},
       placeholder:"Colle ici les opérations…\n\nEx :\nCarte Carrefour    47,50 €\nVirement Loyer    645,00 €\nNetflix    13,99 €",
