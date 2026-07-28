@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v67";
+const APP_VERSION = "v68";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1155,7 +1155,7 @@ function App(){
       el("button",{style:S.navBtn,onClick:()=>changeMonth(1)},el(Icon,{name:"chevron-right",size:20}))),
 
     // ---- panneau d'onglet (clé = tab pour rejouer l'animation) ----
-    el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:14}},
+    el("div",{key:tab,className:"tab-panel",style:{display:"flex",flexDirection:"column",gap:18}},
 
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
@@ -4326,12 +4326,19 @@ function ForecastCard(props){
       "À ton rythme actuel : ",el("strong",{style:{color:col}},(up?"+ ":"− ")+fmt(Math.abs(monthlyNet))+" / mois"),
       monthlyNet===0?" (renseigne quelques mois pour estimer)":""),
     el("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",height:H,display:"block"},preserveAspectRatio:"none"},
-      el("defs",null,el("linearGradient",{id:"fcg",x1:"0",y1:"0",x2:"0",y2:"1"},
-        el("stop",{offset:"0%","stop-color":col,"stop-opacity":"0.28"}),
-        el("stop",{offset:"100%","stop-color":col,"stop-opacity":"0.02"}))),
+      el("defs",null,
+        el("linearGradient",{id:"fcg",x1:"0",y1:"0",x2:"0",y2:"1"},
+          el("stop",{offset:"0%","stop-color":col,"stop-opacity":"0.34"}),
+          el("stop",{offset:"100%","stop-color":col,"stop-opacity":"0"})),
+        el("linearGradient",{id:"fcl",x1:"0",y1:"0",x2:"1",y2:"0"},
+          el("stop",{offset:"0%","stop-color":col,"stop-opacity":"0.55"}),
+          el("stop",{offset:"100%","stop-color":col,"stop-opacity":"1"}))),
+      // repères horizontaux discrets
+      [0.33,0.66].map(function(f,i){return el("line",{key:i,x1:pad,y1:(pad+(H-2*pad)*f).toFixed(1),x2:W-pad,y2:(pad+(H-2*pad)*f).toFixed(1),stroke:"var(--border-2)",strokeWidth:"1"});}),
       zeroY!==null&&el("line",{x1:pad,y1:zeroY,x2:W-pad,y2:zeroY,stroke:"#C8516C",strokeWidth:"1",strokeDasharray:"3 3","stroke-opacity":"0.5"}),
       el("path",{d:area,fill:"url(#fcg)",stroke:"none"}),
-      el("path",{d:line,fill:"none",stroke:col,strokeWidth:"2.5",strokeLinejoin:"round",strokeLinecap:"round"}),
+      el("path",{d:line,fill:"none",stroke:"url(#fcl)",strokeWidth:"3",strokeLinejoin:"round",strokeLinecap:"round"}),
+      el("circle",{cx:xy[xy.length-1][0],cy:xy[xy.length-1][1],r:"6",fill:col,"fill-opacity":"0.22"}),
       el("circle",{cx:xy[xy.length-1][0],cy:xy[xy.length-1][1],r:"3.5",fill:col})),
     el("div",{style:{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginTop:12,flexWrap:"wrap",gap:6}},
       el("span",{style:{fontSize:12.5,color:"var(--text-3)"}},"Épargne projetée dans "+horizon+" mois"),
@@ -4371,7 +4378,7 @@ function BentoTop(p){
       sub&&el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:6}},sub));
   };
   var span=function(cols,rows){return {gridColumn:"span "+cols,gridRow:rows?("span "+rows):"auto"};};
-  return el("div",{style:{display:"grid",gridTemplateColumns:isWide?"repeat(4,1fr)":"repeat(2,1fr)",gap:14,gridAutoRows:"minmax(92px,auto)"}},
+  return el("div",{style:{display:"grid",gridTemplateColumns:isWide?"repeat(4,1fr)":"repeat(2,1fr)",gap:18,gridAutoRows:"minmax(92px,auto)"}},
     // HÉROS
     el("div",{style:tile(Object.assign({position:"relative",overflow:"hidden",justifyContent:"space-between",padding:"24px"},span(2,2)))},
       el("div",{style:{position:"relative",zIndex:1}},
@@ -4531,7 +4538,7 @@ function DesktopDashboard(props){
       el("button",{style:linkBtn,onClick:function(){setTab("epargne");}},"Voir projets ",el(Icon,{name:"arrow-right",size:13})));
   }
 
-  return el("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:20}},
     el(BentoTop,{isWide:true,monthName:monthName,nonAffecte:nonAffecte,totalRevenus:totalRevenus,totalDep:totalDep,totalSaved:totalSaved,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,months:months,patrimoineNet:patrimoineNet,totalCagnottes:totalCagnottes,avgMonthlyExpenses:(props.avgMonthlyExpenses?props.avgMonthlyExpenses():0),onQuickAdd:props.onQuickAdd,setTab:setTab}),
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       cagnottesCard(),loansCard(),projetsCard()),
@@ -4715,8 +4722,8 @@ function DashboardScreen(props){
 
 // ----------------------------------------------------------------------------
 const S = {
-  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"transparent"},
-  appWide:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:16,padding:"28px 40px 60px 288px",maxWidth:1280,margin:"0 auto",color:"var(--text)",background:"transparent"},
+  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:18,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"transparent"},
+  appWide:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:20,padding:"28px 40px 60px 288px",maxWidth:1280,margin:"0 auto",color:"var(--text)",background:"transparent"},
   sidebar:{position:"fixed",left:0,top:0,bottom:0,width:248,zIndex:95,display:"flex",flexDirection:"column",padding:"22px 16px",background:"var(--glass-bg-strong)",WebkitBackdropFilter:"blur(30px) saturate(180%)",backdropFilter:"blur(30px) saturate(180%)",borderRight:"1px solid var(--glass-border)"},
   sideItem:{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",borderRadius:13,border:"none",background:"transparent",color:"var(--text-3)",fontSize:14.5,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all .15s"},
   sideItemOn:{background:"var(--brand-soft)",color:"var(--brand)"},
@@ -4731,7 +4738,7 @@ const S = {
   monthNav:{display:"flex",alignItems:"center",justifyContent:"center",gap:18,background:"var(--glass-bg)",borderRadius:16,padding:10,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
   navBtn:{width:36,height:36,borderRadius:11,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-2)"},
   monthLabel:{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center"},
-  flowCard:{background:"var(--glass-bg)",borderRadius:22,padding:20,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
+  flowCard:{background:"var(--glass-bg)",borderRadius:24,padding:24,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
   flowRow:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"},
   flowLabel:{display:"flex",alignItems:"center",gap:8,fontSize:14,color:"var(--text-2)",fontWeight:500},
   flowVal:{fontSize:16,fontWeight:700},
@@ -4744,9 +4751,9 @@ const S = {
   actionRow:{display:"flex",gap:10},
   copyBtn:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,border:"1px solid var(--glass-border)",background:"var(--glass-bg)",WebkitBackdropFilter:"blur(10px)",backdropFilter:"blur(10px)",color:"var(--text-2)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px",borderRadius:12},
   resetBtn:{border:"none",background:"transparent",color:"var(--text-4)",fontSize:13,fontWeight:600,cursor:"pointer",padding:"10px 14px"},
-  section:{background:"var(--glass-bg)",borderRadius:20,padding:16,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
-  sectionHead:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10},
-  sectionTitle:{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:700},
+  section:{background:"var(--glass-bg)",borderRadius:24,padding:22,boxShadow:"var(--glass-shadow)",border:"1px solid var(--glass-border)",WebkitBackdropFilter:"blur(20px)",backdropFilter:"blur(20px)"},
+  sectionHead:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:14},
+  sectionTitle:{display:"flex",alignItems:"center",gap:9,fontSize:15.5,fontWeight:800,letterSpacing:"-0.01em"},
   badge:{fontSize:13,fontWeight:800,padding:"4px 11px",borderRadius:20},
   blockHint:{fontSize:12.5,color:"var(--text-4)",margin:"0 0 8px"},
   lineList:{display:"flex",flexDirection:"column"},
