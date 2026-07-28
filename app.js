@@ -1098,21 +1098,38 @@ function App(){
   var navItems=[["accueil","home","Accueil"],["budget","coins","Budget"],["epargne","piggy-bank","Épargne"],["outils","calculator","Outils"],["reglages","settings","Réglages"]];
   var appStyle=isWide?S.appWide:S.app;
   return el("div",{style:appStyle},
-    // ---- Barre latérale (interface web PC) ----
-    isWide && el("aside",{style:S.sidebar},
-      el("div",{style:{display:"flex",alignItems:"center",gap:11,padding:"2px 8px 20px"}},
-        el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
-        el("div",null,
-          el("div",{style:{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}},"Budget du foyer"),
-          el("div",{style:{fontSize:11,color:"var(--text-3)"}},"Gestion du foyer"))),
-      el("div",{style:{display:"flex",flexDirection:"column",gap:4}},navItems.map(function(t){
-        var on=tab===t[0];
-        return el("button",{key:t[0],style:Object.assign({},S.sideItem,on?S.sideItemOn:{}),onClick:function(){setTab(t[0]);}},
-          el(Icon,{name:t[1],size:19,color:on?"#1D8BCE":"var(--text-3)"}),t[2]);
-      })),
-      el("div",{style:{marginTop:"auto",display:"flex",flexDirection:"column",gap:4,paddingTop:16,borderTop:"1px solid var(--border-2)"}},
-        el("button",{style:S.sideItem,onClick:cycleTheme},el(Icon,{name:theme==="sombre"?"moon":theme==="clair"?"sun":"contrast",size:18,color:"var(--text-3)"}),"Thème : "+(theme==="auto"?"auto":theme)),
-        db&&el("button",{style:S.sideItem,onClick:function(){if(db)db.auth.signOut();}},el(Icon,{name:"log-out",size:18,color:"var(--text-3)"}),"Déconnexion"))),
+    // ---- Barre latérale (interface web PC) : cockpit groupé ----
+    isWide && (function(){
+      var sideBtn=function(id,icon,label){
+        var on=tab===id;
+        return el("button",{key:id,style:Object.assign({},S.sideItem,on?S.sideItemOn:{}),onClick:function(){setTab(id);}},
+          el(Icon,{name:icon,size:19,color:on?"#1D8BCE":"var(--text-3)"}),label);
+      };
+      var grpLabel=function(t){return el("div",{style:{fontSize:10.5,fontWeight:700,color:"var(--text-4,var(--text-3))",textTransform:"uppercase",letterSpacing:"0.09em",padding:"0 14px",margin:"14px 0 6px"}},t);};
+      var quick=function(icon,label,color,onClick){
+        return el("button",{onClick:onClick,style:{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"10px 14px",borderRadius:12,border:"none",background:"transparent",color:"var(--text-2)",fontSize:13.5,fontWeight:600,cursor:"pointer",textAlign:"left"}},
+          el(Icon,{name:icon,size:18,color:color}),label);
+      };
+      return el("aside",{style:S.sidebar},
+        el("div",{style:{display:"flex",alignItems:"center",gap:11,padding:"2px 8px 8px"}},
+          el("div",{style:S.logo},el(Icon,{name:"piggy-bank",size:22,color:"#fff"})),
+          el("div",null,
+            el("div",{style:{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}},"Budget du foyer"),
+            el("div",{style:{fontSize:11,color:"var(--text-3)"}},couple.enabled?(couple.a.name+" & "+couple.b.name):"Gestion du foyer"))),
+        el("div",{style:{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}},
+          grpLabel("Pilotage"),
+          el("div",{style:{display:"flex",flexDirection:"column",gap:3}},sideBtn("accueil","home","Accueil"),sideBtn("budget","coins","Budget"),sideBtn("epargne","piggy-bank","Épargne & patrimoine")),
+          grpLabel("Analyses"),
+          el("div",{style:{display:"flex",flexDirection:"column",gap:3}},
+            quick("file-text","Bilan de l'année","#1D8BCE",function(){setBilanYear(year);}),
+            couple.enabled&&quick("users","Équilibre du couple","#945ECF",function(){setShowCouple(true);})),
+          grpLabel("Outils"),
+          el("div",{style:{display:"flex",flexDirection:"column",gap:3}},sideBtn("outils","calculator","Simulateurs & placements"))),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:3,paddingTop:12,borderTop:"1px solid var(--border-2)"}},
+          sideBtn("reglages","settings","Réglages"),
+          el("button",{style:S.sideItem,onClick:cycleTheme},el(Icon,{name:theme==="sombre"?"moon":theme==="clair"?"sun":"contrast",size:18,color:"var(--text-3)"}),"Thème : "+(theme==="auto"?"auto":theme)),
+          db&&el("button",{style:S.sideItem,onClick:function(){if(db)db.auth.signOut();}},el(Icon,{name:"log-out",size:18,color:"var(--text-3)"}),"Déconnexion")));
+    })(),
 
     // header (mobile uniquement)
     !isWide && el("header",{style:S.header},
