@@ -415,6 +415,22 @@ function LoanModal({pots,onClose,onSave}){
     el("button",{style:Object.assign({},S.saveBtn,{marginTop:10,background:canSubmit?"linear-gradient(135deg,#945ECF,#a875e0)":"var(--border)",boxShadow:canSubmit?"0 4px 14px #945ECF44":"none",cursor:canSubmit?"pointer":"not-allowed"}),onClick:submit},"Enregistrer l'achat"));
 }
 
+function CategoryPickModal({categories,current,onClose,onPick}){
+  categories = categories || [];
+  return el(Modal,{title:"Catégorie de la dépense",onClose:onClose},
+    el("p",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,lineHeight:1.5}},"Range cette dépense pour la retrouver dans ton bilan annuel."),
+    el("div",{style:{display:"flex",flexWrap:"wrap",gap:8}},
+      categories.map(function(c){
+        var on=current===c.id;
+        return el("button",{key:c.id,onClick:function(){onPick(c.id);},
+          style:{display:"inline-flex",alignItems:"center",gap:7,padding:"9px 13px",borderRadius:11,cursor:"pointer",
+            border:"1.5px solid "+(on?c.color:"var(--border)"),background:on?c.color+"18":"var(--field-bg)",
+            color:on?c.color:"var(--text-2)",fontSize:13.5,fontWeight:on?700:600}},
+          el("span",{style:{width:10,height:10,borderRadius:3,background:c.color}}),c.label);
+      })),
+    el("button",{onClick:function(){onPick(null);},style:{marginTop:16,width:"100%",padding:11,borderRadius:11,border:"none",background:"var(--surface-2)",color:"var(--text-3)",fontSize:13.5,fontWeight:600,cursor:"pointer"}},"Aucune catégorie"));
+}
+
 function ReimburseModal({loan,remaining,pots,onClose,onSave}){
   // Répartition libre sur plusieurs cagnottes à la fois : un montant par cagnotte
   const [amounts,setAmounts]=useState({});
@@ -701,6 +717,7 @@ function App(){
   const [projects,setProjects] = useState([]);
   const [loans,setLoans]       = useState([]);
   const [categories,setCategories] = useState(DEFAULT_CATEGORIES);
+  const [bilanYear,setBilanYear] = useState(null);
   const isWide = useIsWide(1000);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
@@ -1088,8 +1105,8 @@ function App(){
 
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
-      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab})
-      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab})),
+      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);}})
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);}})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && (function(){
@@ -1158,7 +1175,8 @@ function App(){
     var importEl=el("button",{style:Object.assign({},S.copyBtn,{color:"#19A979",borderColor:"#19A97944",background:"#19A97910",justifyContent:"center"}),onClick:function(){setModal({kind:"import"});}},
         el(Icon,{name:"upload",size:14,color:"#19A979"})," Importer depuis l'appli bancaire");
     var blocksEls=Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
-        reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",
+        reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",categories:categories,
+        onCat:kind!=="revenus"?function(id){setModal({kind:"catpick",lineKind:kind,lineId:id});}:null,
         onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}));
     if(isWide){
       return el("div",{style:{display:"grid",gridTemplateColumns:"minmax(0,1.7fr) minmax(0,1fr)",gap:20,alignItems:"start"}},
@@ -1192,9 +1210,13 @@ function App(){
       onSignOut:function(){if(db)db.auth.signOut();},
       onExport:exportJSON,
       onImport:importJSON,
-      user:user,db:db
+      user:user,db:db,
+      categories:categories,onAddCategory:addCategory,onEditCategory:editCategory,onDelCategory:delCategory
     })
     ), // fin du panneau d'onglet
+
+    // ---- Bilan annuel (plein écran) ----
+    (bilanYear!==null) && el(BilanAnnuel,{months:months,year:bilanYear,categories:categories,onChangeYear:function(d){setBilanYear(bilanYear+d);},onClose:function(){setBilanYear(null);}}),
 
     // ---- barre d'onglets en bas (mobile uniquement ; PC = barre latérale) ----
     !isWide && el("nav",{style:S.tabBar},
@@ -1215,6 +1237,7 @@ function App(){
     (modal&&modal.kind==="withdraw") && el(WithdrawModal,{pot:modal,expenses:[...(data.fixed||[]),...(data.variable||[]),...(data.excep||[])],onClose:()=>setModal(null),onSave:function(a,note,opts){addWithdrawal(modal.potId,a,note,opts,modal.potLabel);setModal(null);}}),
     (modal&&modal.kind==="newloan") && el(LoanModal,{pots:pots,onClose:()=>setModal(null),onSave:function(loan){addLoan(loan);setModal(null);}}),
     (modal&&modal.kind==="reimburse") && el(ReimburseModal,{loan:modal.loan,remaining:modal.remaining,pots:pots,onClose:()=>setModal(null),onSave:function(entries,note){reimburseLoan(modal.loan.id,entries,note);setModal(null);}}),
+    (modal&&modal.kind==="catpick") && el(CategoryPickModal,{categories:categories,current:((data[modal.lineKind]||[]).find(function(x){return x.id===modal.lineId;})||{}).cat,onClose:()=>setModal(null),onPick:function(catId){setLineCat(modal.lineKind,modal.lineId,catId);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -1253,6 +1276,25 @@ function App(){
         el("button",{onClick:doUndo,style:{border:"none",borderRadius:10,padding:"8px 16px",fontWeight:800,fontSize:13.5,cursor:"pointer",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff"}},"↩ Annuler"),
         el("button",{onClick:function(){setUndoToast(null);if(undoTimer.current)clearTimeout(undoTimer.current);},style:{border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:13,cursor:"pointer",background:"transparent",color:"#8a94a6"}},"OK")))
   );
+}
+
+// ---- Gestion des catégories (dans Réglages) ----
+function CatManager({categories,onAdd,onEdit,onDel}){
+  categories = categories || [];
+  var [newLabel,setNewLabel]=useState("");
+  var add=function(){ if(!newLabel.trim())return; var color=POT_PALETTE[categories.length%POT_PALETTE.length]; onAdd({label:newLabel.trim(),color:color}); setNewLabel(""); };
+  return el("div",{style:{background:"var(--surface)",borderRadius:18,padding:"6px 16px",boxShadow:"var(--shadow-card)"}},
+    categories.map(function(c,i){
+      var last=i===categories.length-1;
+      return el("div",{key:c.id,style:{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:last?"none":"1px solid var(--border-2)"}},
+        el("span",{style:{width:12,height:12,borderRadius:4,background:c.color,flexShrink:0}}),
+        el("input",{value:c.label,onChange:function(e){onEdit(c.id,{label:e.target.value});},style:{flex:1,border:"none",background:"transparent",fontSize:14.5,color:"var(--text)",outline:"none"}}),
+        el("button",{onClick:function(){onDel(c.id);},style:{border:"none",background:"transparent",color:"var(--del)",cursor:"pointer",padding:4,display:"flex"}},el(Icon,{name:"trash-2",size:15})));
+    }),
+    el("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderTop:"1px dashed var(--border-2)"}},
+      el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
+      el("input",{value:newLabel,placeholder:"Nouvelle catégorie…",onChange:function(e){setNewLabel(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")add();},style:{flex:1,border:"none",background:"transparent",fontSize:14.5,color:"var(--text)",outline:"none"}}),
+      newLabel.trim()&&el("button",{onClick:add,style:{border:"none",background:"#1D8BCE18",color:"#1D8BCE",borderRadius:8,padding:"6px 12px",fontWeight:700,fontSize:13,cursor:"pointer"}},"Ajouter")));
 }
 
 // ---- Page Réglages ----
@@ -1295,6 +1337,11 @@ function SettingsScreen(props){
             el("div",{style:labelStyle},"Budget prévu vs réel"),
             el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Saisis le montant réel dépensé à côté du prévu sur chaque ligne")),
           el(Switch,{on:showPrevus,color:"#1D8BCE",onToggle:function(){setShowPrevus(!showPrevus);}})))),
+
+    // Section Catégories
+    el("div",null,
+      el("div",{style:sectionLabel},"Catégories de dépenses"),
+      el(CatManager,{categories:props.categories,onAdd:props.onAddCategory,onEdit:props.onEditCategory,onDel:props.onDelCategory})),
 
     // Section Foyer
     (user&&db) && el("div",null,
@@ -1729,7 +1776,8 @@ function flowRow(icon,color,label,val,valColor){
     el("span",{style:{...S.flowVal,color:valColor}},val));
 }
 
-function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring}){
+function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring,categories,onCat}){
+  var catById=function(id){ var cs=categories||[]; for(var i=0;i<cs.length;i++){ if(cs[i].id===id) return cs[i]; } return null; };
   var potFundingItems=kind==="revenus"?(items||[]).filter(function(x){return x.fromPot;}):[];
   var realItems=kind==="revenus"?(items||[]).filter(function(x){return !x.fromPot;}):items;
   const total=realItems.reduce((s,x)=>s+(x.amount||0),0);
@@ -1781,6 +1829,12 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("span",{style:S.eur},"€")),
           onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
+        onCat&&(function(){
+          var c=catById(it.cat);
+          return el("button",{onClick:function(){onCat(it.id);},style:{alignSelf:"flex-start",display:"inline-flex",alignItems:"center",gap:5,margin:"-1px 0 5px 22px",padding:"2px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:10.5,fontWeight:600,background:c?c.color+"18":"var(--surface-2)",color:c?c.color:"var(--text-3)"}},
+            c?el("span",{style:{width:7,height:7,borderRadius:2,background:c.color}}):el(Icon,{name:"plus",size:10,color:"var(--text-3)"}),
+            c?c.label:"catégorie");
+        })(),
         it.potCovers&&it.potCovers.length>0&&el("div",{style:{margin:"-2px 0 6px 22px"}},
           it.potCovers.map(function(pc,pci){
             var totalCovers=(it.potCovers||[]).reduce(function(s,c){return s+c.coveredAmount;},0);
@@ -3921,6 +3975,72 @@ function DonutChart(props){
       })));
 }
 
+// ---- Bilan annuel (plein écran) ----
+function BilanAnnuel({months,year,categories,onChangeYear,onClose}){
+  categories = categories || [];
+  var b = Core.annualSummary(months, year);
+  var tauxEpargne = b.revenus>0 ? Math.round(b.epargne/b.revenus*100) : 0;
+  var catOf = function(id){ if(id==="__none") return {label:"Non classé",color:"#8a94a6"}; for(var i=0;i<categories.length;i++){ if(categories[i].id===id) return categories[i]; } return {label:"Autre",color:"#8a94a6"}; };
+  var catRows = Object.keys(b.byCategory).map(function(id){ return {id:id, label:catOf(id).label, color:catOf(id).color, total:b.byCategory[id]}; })
+    .filter(function(r){ return r.total>0; }).sort(function(a,c){ return c.total-a.total; });
+  var catMax = catRows.reduce(function(m,r){ return Math.max(m,r.total); }, 1);
+  var moMax = b.byMonth.reduce(function(m,x){ return Math.max(m,x.revenus,x.depenses); }, 1);
+  var moNet = b.byMonth.reduce(function(s,x){ return s + x.net; }, 0);
+
+  var kpi=function(label,val,color,sub){
+    return el("div",{style:{background:"var(--surface)",border:"1px solid var(--line,var(--border))",borderRadius:16,padding:"16px 18px",boxShadow:"var(--shadow-card)"}},
+      el("div",{style:{fontSize:11.5,color:"var(--text-3)",fontWeight:600,marginBottom:6}},label),
+      el("div",{style:{fontSize:24,fontWeight:800,letterSpacing:"-0.5px",color:color}},val),
+      sub?el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:3}},sub):null);
+  };
+  return el("div",{style:{position:"fixed",inset:0,zIndex:120,background:"var(--bg-gradient,var(--bg))",overflowY:"auto",WebkitOverflowScrolling:"touch"}},
+    el("div",{style:{maxWidth:900,margin:"0 auto",padding:"calc(20px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom))",display:"flex",flexDirection:"column",gap:18}},
+      // header
+      el("div",{style:{display:"flex",alignItems:"center",gap:12}},
+        el("button",{onClick:onClose,style:{border:"none",background:"var(--surface-2)",borderRadius:11,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}},el(Icon,{name:"chevron-left",size:20})),
+        el("div",{style:{flex:1}},
+          el("div",{style:{fontSize:12,color:"var(--text-3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.5px"}},"Bilan annuel"),
+          el("div",{style:{fontSize:24,fontWeight:800,letterSpacing:"-0.5px"}},"Année "+year)),
+        el("div",{style:{display:"flex",gap:6}},
+          el("button",{onClick:function(){onChangeYear(-1);},style:{border:"none",background:"var(--surface-2)",borderRadius:10,width:38,height:38,cursor:"pointer",color:"var(--text)"}},el(Icon,{name:"chevron-left",size:18})),
+          el("button",{onClick:function(){onChangeYear(1);},style:{border:"none",background:"var(--surface-2)",borderRadius:10,width:38,height:38,cursor:"pointer",color:"var(--text)"}},el(Icon,{name:"chevron-right",size:18})))),
+      // KPIs
+      el("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12}},
+        kpi("Revenus","+ "+fmt(b.revenus),"#19A979","sur l'année"),
+        kpi("Dépenses","− "+fmt(b.depenses),"#C8516C","nettes"),
+        kpi("Épargne",fmt(b.epargne),b.epargne>=0?"#1D8BCE":"#C8516C","mise de côté"),
+        kpi("Taux d'épargne",tauxEpargne+" %",tauxEpargne>=10?"#19A979":"#E8743B","des revenus")),
+      // Évolution mensuelle
+      el("div",{style:{background:"var(--surface)",borderRadius:18,padding:18,boxShadow:"var(--shadow-card)"}},
+        el("div",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:14}},"Revenus vs dépenses, mois par mois"),
+        el("div",{style:{display:"flex",alignItems:"flex-end",gap:"3%",height:150,paddingBottom:20,position:"relative"}},
+          b.byMonth.map(function(x){
+            var rh=Math.round(x.revenus/moMax*120), dh=Math.round(x.depenses/moMax*120);
+            return el("div",{key:x.month,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,position:"relative",height:"100%",justifyContent:"flex-end"}},
+              el("div",{style:{display:"flex",gap:2,alignItems:"flex-end",height:120}},
+                el("div",{title:"Revenus "+fmt(x.revenus),style:{width:7,height:Math.max(2,rh),background:"#19A979",borderRadius:"2px 2px 0 0"}}),
+                el("div",{title:"Dépenses "+fmt(x.depenses),style:{width:7,height:Math.max(2,dh),background:"#E8743B",borderRadius:"2px 2px 0 0"}})),
+              el("div",{style:{fontSize:9,color:"var(--text-3)",position:"absolute",bottom:0}},MONTHS_FR[x.month-1].slice(0,1)));
+          })),
+        el("div",{style:{display:"flex",gap:16,fontSize:11.5,color:"var(--text-3)",marginTop:6}},
+          el("span",{style:{display:"flex",alignItems:"center",gap:5}},el("span",{style:{width:9,height:9,borderRadius:2,background:"#19A979"}}),"Revenus"),
+          el("span",{style:{display:"flex",alignItems:"center",gap:5}},el("span",{style:{width:9,height:9,borderRadius:2,background:"#E8743B"}}),"Dépenses"),
+          el("span",{style:{marginLeft:"auto",fontWeight:700,color:moNet>=0?"#19A979":"#C8516C"}},"Solde année : "+(moNet>=0?"+":"")+fmt(moNet)))),
+      // Répartition par catégorie
+      el("div",{style:{background:"var(--surface)",borderRadius:18,padding:18,boxShadow:"var(--shadow-card)"}},
+        el("div",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:14}},"Où part l'argent — par catégorie"),
+        catRows.length===0&&el("p",{style:{fontSize:13,color:"var(--text-3)",margin:0}},"Range tes dépenses en catégories (via la puce sous chaque ligne du budget) pour voir la répartition ici."),
+        el("div",{style:{display:"flex",flexDirection:"column",gap:11}},catRows.map(function(r){
+          var pct=b.depenses>0?Math.round(r.total/b.depenses*100):0;
+          return el("div",{key:r.id},
+            el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}},
+              el("span",{style:{display:"flex",alignItems:"center",gap:7,color:"var(--text-2)",fontWeight:600}},el("span",{style:{width:10,height:10,borderRadius:3,background:r.color}}),r.label),
+              el("span",{style:{fontWeight:700}},fmt(r.total)+"  ·  "+pct+" %")),
+            el("div",{style:{height:7,background:"var(--border-2)",borderRadius:4,overflow:"hidden"}},
+              el("div",{style:{height:"100%",width:Math.round(r.total/catMax*100)+"%",background:r.color,borderRadius:4}})));
+        })))));
+}
+
 // ---- Prévision de trésorerie (épargne projetée sur les mois à venir) ----
 function ForecastCard(props){
   var startBalance=props.startBalance||0;
@@ -4100,7 +4220,11 @@ function DesktopDashboard(props){
       kpiCard("Reste à vivre",fmt(nonAffecte),resteColor,"non affecté")),
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       budgetCard(),cagnottesCard(),loansCard(),projetsCard()),
-    el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}));
+    el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}),
+    props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
+      el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
+      el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Bilan de l'année"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Revenus, dépenses et répartition par catégorie sur l'année")),
+      el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})));
 }
 
 // ---- Tableau de bord ----
@@ -4183,6 +4307,10 @@ function DashboardScreen(props){
 
     // --- Prévision de trésorerie ---
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
+    props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:20,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
+      el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
+      el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Bilan de l'année"),el("span",{style:{display:"block",fontSize:12,color:"var(--text-3)"}},"Revenus, dépenses, catégories")),
+      el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
 
     // --- Carte Mois en cours ---
     el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},
