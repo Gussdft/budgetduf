@@ -67,15 +67,73 @@
     return monthlyMax * (1 - Math.pow(1+r, -n)) / r;
   }
 
+  // Prélèvements sociaux 2026
+  var PS_RATE = 0.172;
+
+  // Valeur future : capital initial + versements mensuels, capitalisation annuelle
+  function futureValue(initial, monthly, years, annualRate){
+    var bal = initial || 0;
+    var annualContrib = (monthly || 0) * 12;
+    for(var y=0;y<years;y++){ bal = bal * (1 + annualRate) + annualContrib; }
+    return bal;
+  }
+
+  // Simule une enveloppe d'investissement, NET de frais et d'impôts (fiscalité 2026, simplifiée).
+  // env : "pea" | "cto" | "av" | "per"
+  // p   : {initial, monthly, years, ret (%/an brut), ter (%/an frais de support),
+  //        avFee (%/an frais de gestion AV/PER), tmi (%), couple (bool)}
+  // Renvoie versé, brut (sans frais), fraisCumules, valeurAvantImpot, gains, impots,
+  //         capitalNet, economieEntree (PER), et le net "réel" (capital + économie d'entrée).
+  function investEnvelope(env, p){
+    p = p || {};
+    var initial = p.initial || 0, monthly = p.monthly || 0, years = p.years || 0;
+    var ret = (p.ret || 0) / 100, ter = (p.ter || 0) / 100, avFee = (p.avFee || 0) / 100;
+    var tmi = (p.tmi || 0) / 100;
+    var couple = !!p.couple;
+    var verse = initial + monthly * 12 * years;
+
+    // Frais annuels selon l'enveloppe
+    var feeRate = ter;
+    if(env === "av" || env === "per") feeRate += avFee;
+    var netRate = ret - feeRate;
+
+    var brut = futureValue(initial, monthly, years, ret);           // sans aucun frais
+    var valeur = futureValue(initial, monthly, years, netRate);     // net de frais, avant impôt
+    var fraisCumules = Math.max(0, brut - valeur);
+    var gains = Math.max(0, valeur - verse);
+
+    var impots = 0, economieEntree = 0;
+    if(env === "pea"){
+      impots = gains * PS_RATE;                                     // >5 ans : PS uniquement
+    } else if(env === "cto"){
+      impots = gains * 0.30;                                        // PFU 30 %
+    } else if(env === "av"){
+      var abatt = couple ? 9200 : 4600;                            // >8 ans
+      impots = gains * PS_RATE + Math.max(0, gains - abatt) * 0.075;
+    } else if(env === "per"){
+      economieEntree = verse * tmi;                                 // déduction à l'entrée
+      impots = verse * tmi + gains * 0.30;                          // sortie : capital à la TMI + gains PFU
+    }
+    var capitalNet = valeur - impots;
+    return {
+      verse:verse, brut:brut, valeurAvantImpot:valeur, fraisCumules:fraisCumules,
+      gains:gains, impots:impots, capitalNet:capitalNet, economieEntree:economieEntree,
+      netReel:capitalNet + economieEntree
+    };
+  }
+
   var Fiscal = {
     IR_BRACKETS: IR_BRACKETS,
     IR_PLAFOND_DEMI_PART: IR_PLAFOND_DEMI_PART,
+    PS_RATE: PS_RATE,
     irDecote: irDecote,
     irParts: irParts,
     irTaxOnQuotient: irTaxOnQuotient,
     irMarginalRate: irMarginalRate,
     loanMonthly: loanMonthly,
-    loanCapacity: loanCapacity
+    loanCapacity: loanCapacity,
+    futureValue: futureValue,
+    investEnvelope: investEnvelope
   };
 
   if(typeof module !== "undefined" && module.exports){ module.exports = Fiscal; }
