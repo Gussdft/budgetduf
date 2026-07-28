@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v62";
+const APP_VERSION = "v63";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -4662,8 +4662,8 @@ function DashboardScreen(props){
 
 // ----------------------------------------------------------------------------
 const S = {
-  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"var(--bg-gradient)"},
-  appWide:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:16,padding:"28px 40px 60px 288px",maxWidth:1280,margin:"0 auto",color:"var(--text)",background:"var(--bg-gradient)"},
+  app:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:14,padding:"calc(16px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom))",maxWidth:560,margin:"0 auto",color:"var(--text)",background:"transparent"},
+  appWide:{minHeight:"100vh",display:"flex",flexDirection:"column",gap:16,padding:"28px 40px 60px 288px",maxWidth:1280,margin:"0 auto",color:"var(--text)",background:"transparent"},
   sidebar:{position:"fixed",left:0,top:0,bottom:0,width:248,zIndex:95,display:"flex",flexDirection:"column",padding:"22px 16px",background:"var(--glass-bg-strong)",WebkitBackdropFilter:"blur(30px) saturate(180%)",backdropFilter:"blur(30px) saturate(180%)",borderRight:"1px solid var(--glass-border)"},
   sideItem:{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",borderRadius:13,border:"none",background:"transparent",color:"var(--text-3)",fontSize:14.5,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all .15s"},
   sideItemOn:{background:"var(--brand-soft)",color:"var(--brand)"},
