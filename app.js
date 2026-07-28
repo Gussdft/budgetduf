@@ -1151,7 +1151,7 @@ function App(){
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
       ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null})
-      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null})),
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},monthName:MONTHS_FR[month]+" "+year})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && (function(){
@@ -4433,6 +4433,21 @@ function DashboardScreen(props){
 
   return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
 
+    // --- HERO : le mois en cours, en un coup d'œil + actions ---
+    el("div",{style:{background:`linear-gradient(150deg,${nonAffecteColor},${nonAffecteColor}cc)`,borderRadius:24,padding:"22px 22px 20px",color:"#fff",boxShadow:"0 8px 28px "+nonAffecteColor+"44"}},
+      el("div",{style:{fontSize:12.5,fontWeight:600,opacity:.9,textTransform:"capitalize"}},props.monthName||monthName),
+      el("div",{style:{fontSize:40,fontWeight:800,letterSpacing:"-1.5px",lineHeight:1.05,marginTop:2}},fmt(nonAffecte)),
+      el("div",{style:{fontSize:13,opacity:.9,marginTop:2}},nonAffecte>=0?"à toi de décider — non affecté":"découvert prévu ce mois"),
+      el("div",{style:{display:"flex",gap:8,marginTop:8,fontSize:12,opacity:.92}},
+        el("span",null,"+ "+fmt(totalRevenus)+" revenus"),
+        el("span",{style:{opacity:.6}},"·"),
+        el("span",null,"− "+fmt(totalDep)+" dépenses"),
+        el("span",{style:{opacity:.6}},"·"),
+        el("span",null,"− "+fmt(totalSaved)+" épargné")),
+      el("div",{style:{display:"flex",gap:10,marginTop:16}},
+        props.onQuickAdd&&el("button",{onClick:props.onQuickAdd,style:{flex:1,border:"none",borderRadius:13,padding:"12px",background:"rgba(255,255,255,.95)",color:nonAffecteColor,fontSize:14,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}},el(Icon,{name:"plus",size:16,color:nonAffecteColor}),"Dépense"),
+        el("button",{onClick:function(){setTab("budget");},style:{flex:1,border:"1.5px solid rgba(255,255,255,.6)",borderRadius:13,padding:"12px",background:"transparent",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}},"Ouvrir le budget"))),
+
     // --- Grille de KPI ---
     el(KpiGrid,{savingsRate:savingsPct,patrimoineNet:kpiPatrimoineNet,precautionMonths:precautionMonths,monthlyExpenses:totalDep,nonAffecte:nonAffecte}),
 
@@ -4448,25 +4463,6 @@ function DashboardScreen(props){
       el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
       el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Bilan de l'année"),el("span",{style:{display:"block",fontSize:12,color:"var(--text-3)"}},"Revenus, dépenses, catégories")),
       el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
-
-    // --- Carte Mois en cours ---
-    el("div",{style:Object.assign({},cardStyle,{background:"linear-gradient(135deg,var(--surface),var(--surface-2))"})},
-      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}},monthName),
-      el("div",{style:Object.assign({},bigNumStyle,{color:nonAffecteColor})},fmt(nonAffecte)),
-      el("div",{style:subStyle},"Non affecté ce mois"),
-      el("div",{style:{height:1,background:"var(--border-2)",margin:"12px 0"}}),
-      el("div",{style:{display:"flex",gap:8}},
-        el("div",{style:colStyle},
-          el("div",{style:colValStyle},"+"+fmt(totalRevenus)),
-          el("div",{style:colLblStyle},"Revenus")),
-        el("div",{style:{width:1,background:"var(--border-2)"}}),
-        el("div",{style:colStyle},
-          el("div",{style:Object.assign({},colValStyle,{color:"#E8743B"})},"-"+fmt(totalDep)),
-          el("div",{style:colLblStyle},"Dépenses")),
-        el("div",{style:{width:1,background:"var(--border-2)"}}),
-        el("div",{style:colStyle},
-          el("div",{style:Object.assign({},colValStyle,{color:"#1D8BCE"})},"-"+fmt(totalSaved)),
-          el("div",{style:colLblStyle},"Épargné")))),
 
     // --- Carte Épargne du mois ---
     el("div",{style:cardStyle},
