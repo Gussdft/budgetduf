@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v69";
+const APP_VERSION = "v70";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1310,7 +1310,14 @@ function App(){
       onClose:()=>setModal(null),
       onConfirm:function(){modal.onConfirm();setModal(null);}}),
 
-    (modal&&modal.kind==="import") && el(ImportModal,{onClose:function(){setModal(null);},onImport:function(txs){
+    (modal&&modal.kind==="import") && el(ImportModal,{onClose:function(){setModal(null);},
+      existingLines:[].concat((data.fixed||[]).map(function(x){return {id:x.id,label:x.label,kind:"fixed"};}),(data.variable||[]).map(function(x){return {id:x.id,label:x.label,kind:"variable"};}),(data.excep||[]).map(function(x){return {id:x.id,label:x.label,kind:"excep"};})),
+      onApplyReel:function(map){
+        setMonthData(function(c){var r=Object.assign({},c.reel||{});Object.keys(map).forEach(function(id){r[id]=(parseFloat(r[id])||0)+map[id];});return Object.assign({},c,{reel:r});});
+        setShowPrevus(true);
+        setModal(null);
+      },
+      onImport:function(txs){
       setMonthData(function(c){
         var next=Object.assign({},c);
         txs.forEach(function(t){
@@ -2253,8 +2260,8 @@ function ConfirmModal({title,message,onClose,onConfirm}){
 function parseTransactions(text){
   var lines=text.split('\n');
   var results=[];
-  // Regex : montant FR format ex "1,35 €" ou "1 235,00 €" en fin de ligne ou avant "›"
-  var amtRe=/([\d\s]+[,.][\d]{2})\s*€/;
+  // Regex : montant FR ex "1,35 €", "1 235,00 €" ou "645,00" (€ optionnel — relevés bancaires)
+  var amtRe=/([\d][\d\s]*[,.][\d]{2})\s*€?/;
   for(var i=0;i<lines.length;i++){
     var line=lines[i].replace(/›/g,'').trim();
     var m=line.match(amtRe);
@@ -2272,63 +2279,111 @@ function parseTransactions(text){
   return results;
 }
 
+// Normalise un libellé pour la comparaison (minuscules, sans accents/ponctuation)
+function normLabel(s){
+  return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+}
+// Trouve la ligne de budget qui correspond le mieux à un libellé de transaction
+function bestLineMatch(label,lines){
+  var n=normLabel(label);
+  if(!n) return null;
+  var toks=n.split(" ").filter(function(t){return t.length>2;});
+  var best=null,bestScore=0;
+  for(var i=0;i<lines.length;i++){
+    var ln=normLabel(lines[i].label);
+    if(!ln) continue;
+    var lt=ln.split(" ").filter(function(t){return t.length>2;});
+    var score=0;
+    if(n.indexOf(ln)>=0||ln.indexOf(n)>=0) score+=2;
+    toks.forEach(function(t){ if(ln.indexOf(t)>=0) score+=1; });
+    lt.forEach(function(t){ if(n.indexOf(t)>=0) score+=1; });
+    if(score>bestScore){bestScore=score;best=lines[i];}
+  }
+  return bestScore>=1?best:null;
+}
+
 function ImportModal(props){
-  var onClose=props.onClose, onImport=props.onImport;
+  var onClose=props.onClose, onImport=props.onImport, onApplyReel=props.onApplyReel;
+  var lines=props.existingLines||[];
   var initText=props.prefill||"";
   var [step,setStep]=useState(initText?2:1);
   var [text,setText]=useState(initText);
-  var [txs,setTxs]=useState(function(){ return initText?parseTransactions(initText):[]; });
+  var [mode,setMode]=useState(lines.length>0?"reel":"add"); // reel = comparer au prévu, add = nouvelles dépenses
+  var enrich=function(list){ return list.map(function(t){var m=bestLineMatch(t.label,lines);return Object.assign({},t,{matchId:m?m.id:""});}); };
+  var [txs,setTxs]=useState(function(){ return initText?enrich(parseTransactions(initText)):[]; });
   var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"]];
 
   function parse(){
     var parsed=parseTransactions(text);
     if(parsed.length===0){alert("Aucune transaction détectée. Vérifie le texte collé.");return;}
-    setTxs(parsed);
+    setTxs(enrich(parsed));
     setStep(2);
   }
   function toggle(id){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{checked:!t.checked}):t;})); }
   function setKind(id,k){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{kind:k}):t;})); }
-  function doImport(){
-    var sel=txs.filter(function(t){return t.checked;});
-    onImport(sel);
+  function setMatch(id,mid){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{matchId:mid}):t;})); }
+  function doImport(){ onImport(txs.filter(function(t){return t.checked;})); }
+  function doReel(){
+    var map={};
+    txs.forEach(function(t){ if(t.checked&&t.matchId){ map[t.matchId]=(map[t.matchId]||0)+t.amount; } });
+    onApplyReel(map);
   }
   var selected=txs.filter(function(t){return t.checked;});
   var total=selected.reduce(function(s,t){return s+t.amount;},0);
+  var matchedCount=selected.filter(function(t){return t.matchId;}).length;
+  var lineName=function(id){var l=lines.find(function(x){return x.id===id;});return l?l.label:"";};
 
-  if(step===1) return el(Modal,{title:"📋 Importer des transactions",onClose:onClose},
-    el("p",{style:{fontSize:13,color:"var(--text-2)",marginBottom:12,lineHeight:1.5}},
-      "Dans ton appli bancaire, ",el("strong",null,"sélectionne toutes les transactions"),", copie-les, puis colle ici."),
+  if(step===1) return el(Modal,{title:"📋 Importer mon relevé",onClose:onClose},
+    el("p",{style:{fontSize:13,color:"var(--text-2)",marginBottom:8,lineHeight:1.5}},
+      "Ouvre ton relevé (ou ton appli bancaire), ",el("strong",null,"sélectionne les opérations"),", copie-les et colle ici. L'appli les rapproche automatiquement de tes lignes de budget."),
+    el("p",{style:{fontSize:11.5,color:"var(--text-4)",marginBottom:12,lineHeight:1.5}},
+      "Astuce : sur un PDF, ouvre-le, Sélectionner tout, Copier, puis colle ici (le collage direct du texte est bien plus fiable que la lecture du PDF)."),
     el("textarea",{
       style:{width:"100%",minHeight:160,padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border-3)",background:"var(--field-bg)",color:"var(--text)",fontSize:13,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none"},
-      placeholder:"Colle ici le texte copié depuis ton appli bancaire…\n\nEx :\nCarrefour    47,50 €\nAmiens\nHier\n\nNetflix    13,99 €\nInternet\nMardi",
+      placeholder:"Colle ici les opérations…\n\nEx :\nCarte Carrefour    47,50 €\nVirement Loyer    645,00 €\nNetflix    13,99 €",
       value:text,
       onChange:function(e){setText(e.target.value);}
     }),
-    el("button",{style:Object.assign({},S.saveBtn,{marginTop:14}),onClick:parse},"Analyser les transactions"));
+    el("button",{style:Object.assign({},S.saveBtn,{marginTop:14}),onClick:parse},"Analyser les opérations"));
 
-  return el(Modal,{title:"📋 "+txs.length+" transactions détectées",onClose:onClose},
+  return el(Modal,{title:"📋 "+txs.length+" opérations détectées",onClose:onClose},
+    // choix du mode
+    lines.length>0&&el("div",{style:{display:"flex",gap:2,padding:3,background:"var(--surface-2)",borderRadius:11,marginBottom:12}},
+      [["reel","Comparer au prévu"],["add","Nouvelles dépenses"]].map(function(o){
+        var on=mode===o[0];
+        return el("button",{key:o[0],onClick:function(){setMode(o[0]);},style:{flex:1,padding:"8px",borderRadius:9,border:"none",cursor:"pointer",fontSize:12.5,fontWeight:on?700:600,background:on?"var(--surface)":"transparent",color:on?"var(--brand)":"var(--text-3)",boxShadow:on?"0 1px 4px rgba(0,0,0,.08)":"none"}},o[1]);
+      })),
     el("div",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:10}},
-      selected.length+" sélectionnées · "+fmt(total)),
+      mode==="reel"?(matchedCount+" / "+selected.length+" rapprochées · "+fmt(total)):(selected.length+" sélectionnées · "+fmt(total))),
     el("div",{style:{display:"flex",gap:8,marginBottom:12}},
       el("button",{onClick:function(){setTxs(txs.map(function(t){return Object.assign({},t,{checked:true});}));},style:{flex:1,padding:"7px",borderRadius:9,border:"1px solid var(--border)",background:"var(--surface-2)",fontSize:12.5,fontWeight:600,cursor:"pointer",color:"var(--text-2)"}},"Tout cocher"),
       el("button",{onClick:function(){setStep(1);},style:{flex:1,padding:"7px",borderRadius:9,border:"1px solid var(--border)",background:"var(--surface-2)",fontSize:12.5,fontWeight:600,cursor:"pointer",color:"var(--text-2)"}},"← Modifier")),
     el("div",{style:{maxHeight:"42vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:16}},
       txs.map(function(t){
-        return el("div",{key:t.id,style:{background:t.checked?"var(--surface)":"var(--surface-2)",borderRadius:12,padding:"10px 12px",border:"1px solid "+(t.checked?"var(--border)":"var(--border-2)"),opacity:t.checked?1:0.5}},
+        return el("div",{key:t.id,style:{background:t.checked?"var(--surface)":"var(--surface-2)",borderRadius:12,padding:"10px 12px",border:"1px solid "+(t.checked?(mode==="reel"&&!t.matchId?"var(--border-3)":"var(--border)"):"var(--border-2)"),opacity:t.checked?1:0.5}},
           el("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:t.checked?8:0}},
             el("input",{type:"checkbox",checked:t.checked,onChange:function(){toggle(t.id);},style:{width:18,height:18,cursor:"pointer",flexShrink:0}}),
             el("span",{style:{flex:1,fontSize:14,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},t.label),
             el("span",{style:{fontSize:14,fontWeight:800,color:"var(--text)",whiteSpace:"nowrap"}},fmt(t.amount))),
-          t.checked&&el("div",{style:{display:"flex",gap:6,paddingLeft:28}},
+          t.checked&&mode==="add"&&el("div",{style:{display:"flex",gap:6,paddingLeft:28}},
             cats.map(function(c){
               var on=t.kind===c[0];
               return el("button",{key:c[0],onClick:function(){setKind(t.id,c[0]);},
                 style:{flex:1,padding:"5px 2px",borderRadius:8,border:on?"1.5px solid "+c[2]:"1.5px solid var(--border-2)",background:on?c[2]+"18":"transparent",color:on?c[2]:"var(--text-3)",fontWeight:on?700:500,fontSize:11.5,cursor:"pointer"}},c[1]);
-            })));
+            })),
+          t.checked&&mode==="reel"&&el("div",{style:{display:"flex",alignItems:"center",gap:8,paddingLeft:28}},
+            el("span",{style:{fontSize:11,color:t.matchId?"#19A979":"var(--text-4)",flexShrink:0}},t.matchId?"↳ vers":"non rapprochée"),
+            el("select",{value:t.matchId||"",onChange:function(e){setMatch(t.id,e.target.value);},style:{flex:1,minWidth:0,padding:"6px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)",fontSize:12.5}},
+              el("option",{value:""},"— ignorer —"),
+              lines.map(function(l){return el("option",{key:l.id,value:l.id},l.label);}))));
       })),
-    selected.length>0
-      ? el("button",{style:S.saveBtn,onClick:doImport},"Importer "+selected.length+" dépense"+(selected.length>1?"s":"")+" · "+fmt(total))
-      : el("button",{style:Object.assign({},S.saveBtn,{background:"var(--surface-3)",color:"var(--text-3)",boxShadow:"none"}),disabled:true},"Sélectionne au moins une transaction"));
+    mode==="reel"
+      ? (matchedCount>0
+          ? el("button",{style:S.saveBtn,onClick:doReel},"Renseigner le réel · "+matchedCount+" ligne"+(matchedCount>1?"s":""))
+          : el("button",{style:Object.assign({},S.saveBtn,{background:"var(--surface-3)",color:"var(--text-3)",boxShadow:"none"}),disabled:true},"Rapproche au moins une opération"))
+      : (selected.length>0
+          ? el("button",{style:S.saveBtn,onClick:doImport},"Importer "+selected.length+" dépense"+(selected.length>1?"s":"")+" · "+fmt(total))
+          : el("button",{style:Object.assign({},S.saveBtn,{background:"var(--surface-3)",color:"var(--text-3)",boxShadow:"none"}),disabled:true},"Sélectionne au moins une transaction")));
 }
 
 // ---- Saisie rapide (depuis iOS Raccourcis) ----
