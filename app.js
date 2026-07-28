@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v64";
+const APP_VERSION = "v65";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1176,43 +1176,36 @@ function App(){
               "Il te reste "+fmt(totalRemaining)+" à te rembourser : "+active.map(function(x){return x.l.label+" ("+fmt(x.remaining)+")";}).join(", ")+". Prévois une part de ton budget ce mois-ci."),
             el("button",{style:{marginTop:8,background:"#945ECF",color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer"},onClick:function(){setTab("epargne");}},"Voir mes remboursements →")));
       })();
-    var summaryEl=el("div",{style:S.flowCard},
-        flowRow("coins","#19A979","Revenus","+ "+fmt(totalRevenus),"#19A979"),
-        (potCovFixed+potCovVariable+potCovExcep>0)?el(React.Fragment,null,
-          potCovFixed>0&&flowRow("house","#E8743B","Fixes","− "+fmt(totalFixed-potCovFixed)+" net","#E8743B"),
-          potCovFixed===0&&flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
-          potCovVariable>0&&flowRow("repeat","#F2B53C","Variables","− "+fmt(totalVariable-potCovVariable)+" net","#F2B53C"),
-          potCovVariable===0&&flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
-          potCovExcep>0&&flowRow("zap","#945ECF","Except.","− "+fmt(totalExcep-potCovExcep)+" net","#945ECF"),
-          potCovExcep===0&&flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF"),
-          (function(){
-            var totalCov=potCovFixed+potCovVariable+potCovExcep;
-            var deps=(data.deposits||[]).filter(function(d){return d.linkedExpenseId&&d.linkedExpenseCover;});
-            var details=deps.map(function(d){
-              var expLabel="";
-              var cats=["fixed","variable","excep"];
-              for(var i=0;i<cats.length;i++){var found=(data[cats[i]]||[]).find(function(x){return x.id===d.linkedExpenseId;});if(found){expLabel=found.label;break;}}
-              var pot=pots.find(function(p){return p.id===d.potId;});
-              return (pot?pot.label:"Cagnotte")+" → "+expLabel+" ("+fmt(d.linkedExpenseCover)+"€)";
-            });
-            return el("div",{style:{paddingLeft:26,paddingBottom:6,display:"flex",flexDirection:"column",gap:3}},
-              el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12.5}},
-                el("span",{style:{display:"flex",alignItems:"center",gap:5,color:"#19A979"}},el(Icon,{name:"piggy-bank",size:12,color:"#19A979"}),"Couverts par cagnottes"),
-                el("span",{style:{fontWeight:700,color:"#19A979",fontSize:12.5}},"+ "+fmt(totalCov)+" récupérés")),
-              details.map(function(txt,i){return el("div",{key:i,style:{fontSize:10.5,color:"var(--text-3)",paddingLeft:18}},txt);}));
-          })()
-        ):el(React.Fragment,null,
-          flowRow("house","#E8743B","Dépenses fixes","− "+fmt(totalFixed),"#E8743B"),
-          flowRow("repeat","#F2B53C","Dépenses variables","− "+fmt(totalVariable),"#F2B53C"),
-          flowRow("zap","#945ECF","Dépenses except.","− "+fmt(totalExcep),"#945ECF")),
-        totalSaved>0 && flowRow("piggy-bank","#1D8BCE","Épargné ce mois","− "+fmt(totalSaved),"#1D8BCE"),
-        el("div",{style:S.flowDivider}),
-        el("div",{style:{...S.resteBox,background:`linear-gradient(135deg,${restColor},${restColor}cc)`}},
-          el("div",{style:S.resteLabel},el(Icon,{name:"piggy-bank",size:16,color:"#fff"})," ",nonAffecte>=0?"Non affecté":"Découvert prévu"),
-          el("div",{style:S.resteVal},fmt(nonAffecte)),
-          el("div",{style:S.resteFoot},`Disponible avant épargne : ${fmt(reste)}`),
-          (nonAffecte>0 && pots.length>0) && el("button",{style:S.allocateBtn,onClick:()=>setModal({kind:"allocate"})},
-            el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes")));
+    var summaryEl=(function(){
+      var totalCov=potCovFixed+potCovVariable+potCovExcep;
+      var of=totalRevenus||1;
+      var libre=totalRevenus>0?Math.max(0,Math.min(1,nonAffecte/totalRevenus)):0;
+      var flows=[{l:"Fixes",v:totalFixed-potCovFixed,c:"#E8743B"},{l:"Variables",v:totalVariable-potCovVariable,c:"#F2B53C"},{l:"Except.",v:totalExcep-potCovExcep,c:"#945ECF"},{l:"Épargne",v:totalSaved,c:"#1D8BCE"}];
+      var chip=function(label,val,color){return el("div",{style:{flex:1,minWidth:0}},el("div",{style:{fontSize:10.5,color:"var(--text-3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}},label),el("div",{style:{fontSize:16,fontWeight:800,color:color,marginTop:3}},val));};
+      return el("div",{style:S.flowCard},
+        // héros non-affecté + anneau
+        el("div",{style:{display:"flex",alignItems:"center",gap:16}},
+          el("div",{style:{flex:1,minWidth:0}},
+            el("div",{style:{fontSize:11,color:"var(--text-3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}},nonAffecte>=0?"Non affecté":"Découvert prévu"),
+            el("div",{style:{fontSize:34,fontWeight:850,letterSpacing:"-0.03em",color:restColor,lineHeight:1.05,marginTop:2}},fmt(nonAffecte)),
+            el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginTop:3}},"Disponible avant épargne : "+fmt(reste))),
+          el(DashRing,{size:76,stroke:9,pct:libre,color:restColor})),
+        // chips revenus / dépensé
+        el("div",{style:{display:"flex",gap:12,marginTop:16,paddingTop:14,borderTop:"1px solid var(--border-2)"}},
+          chip("Revenus","+ "+fmt(totalRevenus),"#19A979"),
+          chip("Dépensé","− "+fmt(totalFixed-potCovFixed+totalVariable-potCovVariable+totalExcep-potCovExcep),"var(--text)"),
+          totalSaved>0&&chip("Épargné","− "+fmt(totalSaved),"#1D8BCE")),
+        // barre de flux
+        el("div",{style:{marginTop:16}},
+          el("div",{style:{display:"flex",height:12,borderRadius:7,overflow:"hidden",background:"var(--track)"}},
+            flows.map(function(f,i){var w=Math.max(0,Math.round(f.v/of*100));return el("div",{key:i,style:{width:w+"%",background:f.c}});})),
+          el("div",{style:{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}},flows.map(function(f,i){
+            return el("span",{key:i,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--text-2)"}},el("span",{style:{width:8,height:8,borderRadius:2,background:f.c}}),f.l+" "+fmt(f.v));
+          }))),
+        totalCov>0&&el("div",{style:{marginTop:12,fontSize:11.5,color:"#19A979",fontWeight:700,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"piggy-bank",size:13,color:"#19A979"}),"+ "+fmt(totalCov)+" récupérés via cagnottes"),
+        (nonAffecte>0 && pots.length>0) && el("button",{style:Object.assign({},S.allocateBtn,{marginTop:14}),onClick:()=>setModal({kind:"allocate"})},
+          el(Icon,{name:"arrow-right",size:15,color:"#fff"})," Répartir dans mes cagnottes"));
+    })();
     var actionsEl=el("div",{style:S.actionRow},
         el("button",{style:S.copyBtn,onClick:function(){
           var hasData=data.revenus.length>0||data.fixed.length>0||data.variable.length>0;
