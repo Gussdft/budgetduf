@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#fbf3f9" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -12,52 +12,55 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <title>Budget du foyer</title>
   <style>
-    /* ----- Thème clair (variables par défaut) ----- */
+    /* ----- Thème clair — identité pastel / magenta ----- */
     :root{
-      --bg-top:#f5f7fa; --bg-bottom:#eef1f6;
-      --surface:#ffffff; --surface-2:#f7f9fc; --surface-3:#f0f3f8;
-      --text:#1a1d29; --text-2:#5a6478; --text-3:#8a94a6; --text-4:#a8b0bf;
-      --border:#e8ebf0; --border-2:#eef1f6; --border-3:#e2e6ee;
-      --shadow:0 1px 4px rgba(0,0,0,.05); --shadow-card:0 1px 4px rgba(0,0,0,.05);
-      --field-bg:#fbfcfe; --track:#e2e6ee;
-      --tabbar-bg:rgba(255,255,255,.78); --tabbar-border:rgba(0,0,0,.07);
-      --overlay:rgba(20,24,38,.45); --del:#c0c6d0;
-      --glass-bg:rgba(255,255,255,0.72);
-      --glass-bg-strong:rgba(255,255,255,0.88);
-      --glass-border:rgba(255,255,255,0.6);
-      --glass-shadow:0 8px 32px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.8) inset;
-      --bg-gradient:linear-gradient(160deg, #e8f4fd 0%, #f0f8f0 40%, #f5f0fb 100%);
+      --brand:#EC3B92; --brand-2:#A855D9; --brand-soft:#FCE7F2;
+      --bg-top:#fbf3f9; --bg-bottom:#f1ecfa;
+      --surface:#ffffff; --surface-2:#faf4fb; --surface-3:#f3ecf8;
+      --text:#241a2e; --text-2:#645a70; --text-3:#9d92ab; --text-4:#c3b8cf;
+      --border:#efe4f1; --border-2:#f5eef8; --border-3:#e6d9ec;
+      --shadow:0 2px 10px rgba(90,40,110,.05); --shadow-card:0 2px 10px rgba(90,40,110,.05), 0 14px 34px rgba(90,40,110,.05);
+      --field-bg:#fbf5fb; --track:#ebe0f0;
+      --tabbar-bg:rgba(255,255,255,.80); --tabbar-border:rgba(120,60,120,.08);
+      --overlay:rgba(40,20,50,.42); --del:#c8bcd0;
+      --glass-bg:rgba(255,255,255,0.74);
+      --glass-bg-strong:rgba(255,255,255,0.90);
+      --glass-border:rgba(255,255,255,0.7);
+      --glass-shadow:0 10px 34px rgba(90,40,110,0.08), 0 1px 0 rgba(255,255,255,0.85) inset;
+      --bg-gradient:linear-gradient(155deg, #fdeef7 0%, #f4edfb 44%, #e9f0fe 100%);
     }
-    /* ----- Thème sombre (palette iOS) ----- */
+    /* ----- Thème sombre — plum profond, accent rose ----- */
     html[data-theme="dark"]{
-      --bg-top:#000000; --bg-bottom:#0a0a0c;
-      --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
-      --text:#f2f2f7; --text-2:#aeaeb2; --text-3:#8e8e93; --text-4:#6e6e73;
-      --border:#38383a; --border-2:#2c2c2e; --border-3:#48484a;
-      --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 1px 3px rgba(0,0,0,.4);
-      --field-bg:#2c2c2e; --track:#3a3a3c;
-      --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
-      --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
-      --glass-bg:rgba(28,28,30,0.72); --glass-bg-strong:rgba(44,44,46,0.88);
+      --brand:#FF5BA8; --brand-2:#B776E8; --brand-soft:#3a1f33;
+      --bg-top:#0c0a12; --bg-bottom:#0a0910;
+      --surface:#1a1620; --surface-2:#241f2c; --surface-3:#302a3a;
+      --text:#f3eff7; --text-2:#b3aabf; --text-3:#8b8398; --text-4:#6b6479;
+      --border:#332c3e; --border-2:#272130; --border-3:#443c50;
+      --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 2px 10px rgba(0,0,0,.4);
+      --field-bg:#241f2c; --track:#302a3a;
+      --tabbar-bg:rgba(26,22,32,.80); --tabbar-border:rgba(255,255,255,.08);
+      --overlay:rgba(0,0,0,.62); --del:#5c5468;
+      --glass-bg:rgba(26,22,32,0.74); --glass-bg-strong:rgba(36,31,44,0.90);
       --glass-border:rgba(255,255,255,0.10);
-      --glass-shadow:0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
-      --bg-gradient:linear-gradient(160deg,#0a0a14 0%,#0a120a 40%,#100a14 100%);
+      --glass-shadow:0 10px 34px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.05) inset;
+      --bg-gradient:linear-gradient(160deg,#140a16 0%,#0e0a18 45%,#0a0c18 100%);
     }
     /* ----- Mode auto : suit le réglage système ----- */
     @media (prefers-color-scheme: dark){
       html[data-theme="auto"]{
-        --bg-top:#000000; --bg-bottom:#0a0a0c;
-        --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
-        --text:#f2f2f7; --text-2:#aeaeb2; --text-3:#8e8e93; --text-4:#6e6e73;
-        --border:#38383a; --border-2:#2c2c2e; --border-3:#48484a;
-        --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 1px 3px rgba(0,0,0,.4);
-        --field-bg:#2c2c2e; --track:#3a3a3c;
-        --tabbar-bg:rgba(28,28,30,.78); --tabbar-border:rgba(255,255,255,.08);
-        --overlay:rgba(0,0,0,.6); --del:#5a5a5e;
-        --glass-bg:rgba(28,28,30,0.72); --glass-bg-strong:rgba(44,44,46,0.88);
+        --brand:#FF5BA8; --brand-2:#B776E8; --brand-soft:#3a1f33;
+        --bg-top:#0c0a12; --bg-bottom:#0a0910;
+        --surface:#1a1620; --surface-2:#241f2c; --surface-3:#302a3a;
+        --text:#f3eff7; --text-2:#b3aabf; --text-3:#8b8398; --text-4:#6b6479;
+        --border:#332c3e; --border-2:#272130; --border-3:#443c50;
+        --shadow:0 1px 4px rgba(0,0,0,.5); --shadow-card:0 2px 10px rgba(0,0,0,.4);
+        --field-bg:#241f2c; --track:#302a3a;
+        --tabbar-bg:rgba(26,22,32,.80); --tabbar-border:rgba(255,255,255,.08);
+        --overlay:rgba(0,0,0,.62); --del:#5c5468;
+        --glass-bg:rgba(26,22,32,0.74); --glass-bg-strong:rgba(36,31,44,0.90);
         --glass-border:rgba(255,255,255,0.10);
-        --glass-shadow:0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
-        --bg-gradient:linear-gradient(160deg,#0a0a14 0%,#0a120a 40%,#100a14 100%);
+        --glass-shadow:0 10px 34px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.05) inset;
+        --bg-gradient:linear-gradient(160deg,#140a16 0%,#0e0a18 45%,#0a0c18 100%);
       }
     }
     *{box-sizing:border-box;}
@@ -74,7 +77,7 @@
     button:active{transform:scale(.96);opacity:.92;}
     /* anneau de focus iOS sur les champs */
     input:focus,input:focus-visible{outline:none;}
-    input:focus-visible{box-shadow:0 0 0 3.5px rgba(29,139,206,.18);border-radius:9px;}
+    input:focus-visible{box-shadow:0 0 0 3.5px rgba(236,59,146,.20);border-radius:9px;}
     @keyframes slideUp{from{transform:translateY(24px);opacity:0;}to{transform:translateY(0);opacity:1;}}
     @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
     @keyframes pop{0%{transform:scale(.96);}100%{transform:scale(1);}}
@@ -90,7 +93,7 @@
       border-radius:16px;padding:13px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;
       box-shadow:0 8px 24px rgba(0,0,0,.3);animation:slideUp .3s ease;}
     #install-banner button{border:none;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
-    #install-yes{background:linear-gradient(135deg,#1D8BCE,#19A979);color:#fff;}
+    #install-yes{background:linear-gradient(135deg,#EC3B92,#A855D9);color:#fff;}
     #install-no{background:transparent;color:#8a94a6;}
   </style>
 </head>
