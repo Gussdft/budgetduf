@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v65";
+const APP_VERSION = "v66";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1617,6 +1617,21 @@ function PotSparkline({months,potId,year,month,color}){
 }
 
 // ---- Résumé épargne ----
+// Donut multi-segments (SVG)
+function MiniDonut(p){
+  var parts=p.parts||[], total=p.total||1, size=p.size||92, sw=p.stroke||15;
+  var r=(size-sw)/2, c=2*Math.PI*r, off=0;
+  var arcs=parts.map(function(x,i){
+    var dash=Math.max(0,x.val/total)*c;
+    var arc=el("circle",{key:i,cx:size/2,cy:size/2,r:r,fill:"none",stroke:x.color,strokeWidth:sw,
+      strokeDasharray:dash.toFixed(1)+" "+(c-dash).toFixed(1),strokeDashoffset:(-off).toFixed(1),
+      transform:"rotate(-90 "+(size/2)+" "+(size/2)+")"});
+    off+=dash; return arc;
+  });
+  return el("svg",{width:size,height:size,viewBox:"0 0 "+size+" "+size,style:{flexShrink:0}},
+    el("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:(p.track||"rgba(255,255,255,.22)"),strokeWidth:sw}),arcs);
+}
+
 function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved}){
   var total=pots.reduce(function(s,p){return s+potBalance(p.id);},0);
   var parts=pots.map(function(p){return {label:p.label,color:p.color,val:potBalance(p.id)};}).filter(function(x){return x.val>0;});
@@ -1625,15 +1640,17 @@ function PatrimoineCard({pots,potBalance,avgMonthly,thisMonthSaved}){
   pots.forEach(function(p){var t=p.type||"autre";if(!byType[t])byType[t]=0;byType[t]+=potBalance(p.id);});
   var typeKeys=Object.keys(byType).filter(function(k){return byType[k]>0;}).sort(function(a,b){return byType[b]-byType[a];});
   return el("div",{style:{...S.section,background:"linear-gradient(135deg,#1D8BCE,#13A4B4)",color:"#fff"}},
-    el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Patrimoine épargne"),
-    el("div",{style:{fontSize:34,fontWeight:800,letterSpacing:"-1px",margin:"2px 0 14px"}},fmt(total)),
-    el("div",{style:{display:"flex",gap:10,marginBottom:14}},
-      el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Rythme moyen"),el("div",{style:S.patStatVal},fmt(avgMonthly)+" /mois")),
-      el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Épargné ce mois"),el("div",{style:S.patStatVal},fmt(thisMonthSaved)))),
+    el("div",{style:{display:"flex",alignItems:"center",gap:18}},
+      el("div",{style:{flex:1,minWidth:0}},
+        el("div",{style:{fontSize:12,fontWeight:600,opacity:.9,display:"flex",alignItems:"center",gap:6}},el(Icon,{name:"wallet",size:15,color:"#fff"})," Patrimoine épargne"),
+        el("div",{style:{fontSize:34,fontWeight:800,letterSpacing:"-1px",margin:"2px 0 14px"}},fmt(total)),
+        el("div",{style:{display:"flex",gap:10}},
+          el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Rythme moyen"),el("div",{style:S.patStatVal},fmt(avgMonthly)+" /mois")),
+          el("div",{style:S.patStat},el("div",{style:S.patStatLabel},"Épargné ce mois"),el("div",{style:S.patStatVal},fmt(thisMonthSaved))))),
+      parts.length>0&&el(MiniDonut,{parts:parts,total:total,size:96,stroke:15})),
     parts.length>0 && el(React.Fragment,null,
-      el("div",{style:{display:"flex",height:10,borderRadius:6,overflow:"hidden",marginBottom:10}},
-        parts.map(function(x,i){return el("div",{key:i,style:{width:(x.val/total*100)+"%",background:x.color}});})),
-      typeKeys.length>1 && el("div",{style:{display:"flex",flexDirection:"column",gap:5,marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,.2)"}},
+      el("div",{style:{marginTop:4}}),
+      typeKeys.length>1 && el("div",{style:{display:"flex",flexDirection:"column",gap:5,marginTop:14,paddingTop:12,borderTop:"1px solid rgba(255,255,255,.2)"}},
         el("div",{style:{fontSize:10,fontWeight:700,opacity:.8,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:2}},"Par type de compte"),
         typeKeys.map(function(k){
           var t=POT_TYPES[k]||POT_TYPES.autre;
