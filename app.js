@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v75";
+const APP_VERSION = "v76";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -131,16 +131,42 @@ const SECTIONS = {
   variable: { title:"Dépenses variables",       icon:"repeat", accent:"#F2B53C", sign:"−" },
   excep:    { title:"Dépenses exceptionnelles", icon:"zap",    accent:"#945ECF", sign:"−" },
 };
-// Catégories de dépenses personnalisables (pour le bilan annuel)
+// Catégories de dépenses (2 niveaux) — jeu « foyer » par défaut.
+// Les 8 ids d'origine restent des parents pour ne pas casser les données existantes.
 const DEFAULT_CATEGORIES = [
   {id:"alim",      label:"Alimentation", color:"#19A979"},
+    {id:"alim_courses", parent:"alim", label:"Courses",           color:"#19A979"},
+    {id:"alim_boul",    parent:"alim", label:"Boulangerie",       color:"#19A979"},
+    {id:"alim_bouch",   parent:"alim", label:"Boucherie",         color:"#19A979"},
+    {id:"alim_resto",   parent:"alim", label:"Restaurants",       color:"#19A979"},
   {id:"logement",  label:"Logement",     color:"#E8743B"},
+    {id:"log_loyer",    parent:"logement", label:"Loyer / crédit", color:"#E8743B"},
+    {id:"log_energie",  parent:"logement", label:"Énergie",        color:"#E8743B"},
+    {id:"log_internet", parent:"logement", label:"Internet & mobile", color:"#E8743B"},
+    {id:"log_assur",    parent:"logement", label:"Assurances",     color:"#E8743B"},
+    {id:"log_brico",    parent:"logement", label:"Maison & bricolage", color:"#E8743B"},
   {id:"transport", label:"Transport",    color:"#1D8BCE"},
+    {id:"tr_carbu",     parent:"transport", label:"Carburant",     color:"#1D8BCE"},
+    {id:"tr_train",     parent:"transport", label:"Train",         color:"#1D8BCE"},
+    {id:"tr_peage",     parent:"transport", label:"Péage & parking", color:"#1D8BCE"},
+    {id:"tr_loc",       parent:"transport", label:"Location auto", color:"#1D8BCE"},
   {id:"loisirs",   label:"Loisirs",      color:"#945ECF"},
-  {id:"sante",     label:"Santé",        color:"#C8516C"},
-  {id:"abo",       label:"Abonnements",  color:"#13A4B4"},
-  {id:"enfants",   label:"Enfants",      color:"#F2B53C"},
-  {id:"autre",     label:"Autre",        color:"#6C8893"},
+    {id:"loi_sorties",  parent:"loisirs", label:"Sorties & parcs", color:"#945ECF"},
+    {id:"loi_jeux",     parent:"loisirs", label:"Jeux vidéo",      color:"#945ECF"},
+    {id:"loi_stream",   parent:"loisirs", label:"Streaming",       color:"#945ECF"},
+  {id:"shopping",  label:"Shopping",     color:"#C8516C"},
+    {id:"shop_vet",     parent:"shopping", label:"Vêtements",      color:"#C8516C"},
+    {id:"shop_tech",    parent:"shopping", label:"High-tech",      color:"#C8516C"},
+    {id:"shop_divers",  parent:"shopping", label:"Achats divers",  color:"#C8516C"},
+  {id:"sante",     label:"Santé",        color:"#13A4B4"},
+    {id:"sante_pharma", parent:"sante", label:"Pharmacie",         color:"#13A4B4"},
+    {id:"sante_soins",  parent:"sante", label:"Médecin & mutuelle", color:"#13A4B4"},
+  {id:"voyage",    label:"Voyage",       color:"#6C8893"},
+    {id:"voy_hotel",    parent:"voyage", label:"Hôtel & logement",  color:"#6C8893"},
+    {id:"voy_billets",  parent:"voyage", label:"Billets",           color:"#6C8893"},
+  {id:"abo",       label:"Abonnements",  color:"#F2B53C"},
+  {id:"enfants",   label:"Enfants",      color:"#E85AA0"},
+  {id:"autre",     label:"Autre",        color:"#8a94a6"},
 ];
 // Configuration du couple (deux partenaires + règle de partage des charges)
 const DEFAULT_COUPLE = {enabled:false, rule:"prorata", a:{name:"Moi",color:"#1D8BCE"}, b:{name:"Mon/ma partenaire",color:"#945ECF"}};
@@ -1270,6 +1296,7 @@ function App(){
       onImport:importJSON,
       user:user,db:db,
       categories:categories,onAddCategory:addCategory,onEditCategory:editCategory,onDelCategory:delCategory,
+      onLoadSuggested:function(){setCategories(DEFAULT_CATEGORIES.map(function(c){return Object.assign({},c);}));},
       couple:couple,onSetCouple:setCouple
     })
     ), // fin du panneau d'onglet
@@ -1374,7 +1401,7 @@ function CoupleSettings({couple,onSetCouple}){
 }
 
 // ---- Gestion des catégories (dans Réglages) ----
-function CatManager({categories,onAdd,onEdit,onDel}){
+function CatManager({categories,onAdd,onEdit,onDel,onLoadSuggested}){
   categories = categories || [];
   var tops=categories.filter(function(c){return !c.parent;});
   var subsOf=function(id){ return categories.filter(function(c){return c.parent===id;}); };
@@ -1407,7 +1434,9 @@ function CatManager({categories,onAdd,onEdit,onDel}){
     el("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"11px 0"}},
       el(Icon,{name:"plus",size:15,color:"var(--text-4)"}),
       el("input",{value:newTop,placeholder:"Nouvelle catégorie…",onChange:function(e){setNewTop(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addTop();},style:rowInput}),
-      newTop.trim()&&el("button",{onClick:addTop,style:{border:"none",background:"var(--brand-soft)",color:"var(--brand)",borderRadius:8,padding:"6px 12px",fontWeight:700,fontSize:13,cursor:"pointer"}},"Ajouter")));
+      newTop.trim()&&el("button",{onClick:addTop,style:{border:"none",background:"var(--brand-soft)",color:"var(--brand)",borderRadius:8,padding:"6px 12px",fontWeight:700,fontSize:13,cursor:"pointer"}},"Ajouter")),
+    onLoadSuggested&&el("button",{onClick:function(){ if(typeof window!=="undefined"&&window.confirm("Remplacer tes catégories par le jeu « foyer » complet (avec sous-catégories) ? Tes lignes déjà classées gardent leur catégorie.")) onLoadSuggested(); },
+      style:{marginTop:6,width:"100%",padding:"10px",borderRadius:11,border:"1px dashed var(--border-3)",background:"transparent",color:"var(--text-3)",fontSize:12.5,fontWeight:600,cursor:"pointer"}},"↻ Charger les catégories du foyer (suggérées)"));
 }
 
 // ---- Page Réglages ----
@@ -1468,7 +1497,7 @@ function SettingsScreen(props){
     // Section Catégories
     el("div",null,
       el("div",{style:sectionLabel},"Catégories de dépenses"),
-      el(CatManager,{categories:props.categories,onAdd:props.onAddCategory,onEdit:props.onEditCategory,onDel:props.onDelCategory})),
+      el(CatManager,{categories:props.categories,onAdd:props.onAddCategory,onEdit:props.onEditCategory,onDel:props.onDelCategory,onLoadSuggested:props.onLoadSuggested})),
 
     // Section Couple
     el("div",null,
@@ -2365,12 +2394,39 @@ function extractPdfText(file){
 
 // Devine la catégorie d'une opération d'après son libellé (marchands FR + relevé réel)
 var CAT_RULES=[
-  {cat:"alim",kw:["carrefour","leclerc","lidl","auchan","monoprix","franprix","intermarche","inter blanche","super u","hyper u","systeme u","casino","picard","biocoop","boulangerie","boucherie","aldi","cora","naturalia","grand frais","jf market","marie blachere","mtp distri","gf boulangerie","planchon","norma","toogoodtogo","g20"]},
-  {cat:"logement",kw:["loyer","edf","electricite de france","electricité de france","engie","total energie","totalenergies","veolia","suez","saur","free telecom","free mobile","freebox","free ","orange","sfr","bouygues","sosh","syndic","charges copro","leroy merlin","castorama","bricorama","brico depot","maif","maaf","matmut","macif","foncia","assurance hab"]},
-  {cat:"transport",kw:["sncf","sncf-voyageurs","sncf reseau","ratp","uber","essence","station","shell","esso","carburant","autoroute","vinci","aprr","sanef","effia park","easypark","peage","parking","navigo","blablacar","bolt","citiz","velib","keolis","sixt","hertz","europcar","relay","air france","ryanair","transavia"]},
-  {cat:"loisirs",kw:["euro disney","disney","supercell","ragnarok","steam","playstation","xbox","nintendo","netflix","spotify","deezer","canal","cinema","ugc","pathe","gaumont","fnac","restaurant","mc donald","mcdo","burger","kfc","starbucks","subway","club sandwich","kimbo","atmosfeeric","westfield","primark","zara","devred","markus","asos","amazon","booking","airbnb","expedia","decathlon","intersport","maxime hair","spectacle","concert"]},
-  {cat:"sante",kw:["pharmacie","mgen","doctolib","medecin","dentiste","laboratoire","opticien","optic","mutuelle","hopital","clinique","kine","osteo","ameli","cpam"]},
-  {cat:"abo",kw:["abonnement","spliiit","apple.com","apple ","itunes","icloud","google","amazon prime","prime video","microsoft","adobe","gym","basic fit","basic-fit","fitness","neoness","patreon","audible","dropbox","openai","chatgpt","canva"]},
+  // Alimentation
+  {cat:"alim_boul",kw:["boulangerie","marie blachere","gf boulangerie","patisserie","paul "]},
+  {cat:"alim_bouch",kw:["boucherie"]},
+  {cat:"alim_resto",kw:["restaurant","mc donald","mcdo","mc do","burger","kfc","starbucks","subway","club sandwich","kimbo","atmosfeeric","kaffestuga","brasserie","pizz"]},
+  {cat:"alim_courses",kw:["carrefour","leclerc","lidl","auchan","monoprix","franprix","intermarche","inter blanche","super u","hyper u","systeme u","casino","picard","biocoop","aldi","cora","naturalia","grand frais","jf market","mtp distri","planchon","wiotte","norma","toogoodtogo","g20","supermarch"]},
+  // Logement
+  {cat:"log_loyer",kw:["loyer"]},
+  {cat:"log_energie",kw:["edf","electricite de france","electricité de france","engie","total energie","totalenergies","veolia","suez","saur","gaz de"]},
+  {cat:"log_internet",kw:["free telecom","free mobile","freebox","free ","orange","sfr","bouygues","sosh","red by"]},
+  {cat:"log_assur",kw:["maif","maaf","matmut","macif","gmf","axa","allianz","assurance"]},
+  {cat:"log_brico",kw:["leroy merlin","castorama","bricorama","brico depot","bricomarche","ikea","conforama","but "]},
+  // Transport
+  {cat:"tr_train",kw:["sncf","sncf-voyageurs","sncf reseau","oui.sncf","trainline","ratp","keolis","navigo"]},
+  {cat:"tr_peage",kw:["sanef","aprr","vinci autoroute","autoroute","peage","effia park","easypark","parking","q-park","indigo park"]},
+  {cat:"tr_loc",kw:["sixt","hertz","europcar","rent a car","ada location"]},
+  {cat:"tr_carbu",kw:["essence","station","shell","esso","carburant","total access","bp station","carrefour carbu"]},
+  // Loisirs
+  {cat:"loi_sorties",kw:["euro disney","disney","cinema","ugc","pathe","gaumont","spectacle","concert","parc asterix","futuroscope","zoo","musee"]},
+  {cat:"loi_jeux",kw:["supercell","ragnarok","steam","playstation","xbox","nintendo","epic games"]},
+  {cat:"loi_stream",kw:["netflix","spotify","deezer","canal","prime video","disney+"]},
+  // Shopping
+  {cat:"shop_vet",kw:["zara","devred","primark","asos","markus","westfield","kiabi","h&m","uniqlo","celio","jules","jennyfer","bershka","galeries lafayette"]},
+  {cat:"shop_tech",kw:["fnac","darty","boulanger","apple store","samsung","ldlc","materiel.net"]},
+  {cat:"shop_divers",kw:["amazon","cdiscount","action","gifi","zeeman","revolut","paypal","aliexpress","temu","shein"]},
+  // Santé
+  {cat:"sante_pharma",kw:["pharmacie"]},
+  {cat:"sante_soins",kw:["mgen","doctolib","medecin","dentiste","laboratoire","opticien","optic","mutuelle","hopital","clinique","kine","osteo","ameli","cpam"]},
+  // Voyage
+  {cat:"voy_hotel",kw:["hotel","airbnb","booking","morningtonhotel","ibis","novotel","mercure","b&b hotel"]},
+  {cat:"voy_billets",kw:["ryanair","air france","transavia","easyjet","vueling","flixbus","blablacar"]},
+  // Abonnements
+  {cat:"abo",kw:["abonnement","spliiit","apple.com","apple ","itunes","icloud","google","microsoft","adobe","gym","basic fit","basic-fit","fitness","neoness","patreon","audible","dropbox","openai","chatgpt","canva"]},
+  // Enfants
   {cat:"enfants",kw:["creche","cantine","nounou","assmat","peri scol","perisco","garderie","king jouet","joue club","okaidi","petit bateau","vertbaudet","orchestra"]}
 ];
 // Clé marchand pour l'apprentissage (2 premiers tokens significatifs)
@@ -2386,8 +2442,8 @@ function guessCategory(label,learned){
   for(var i=0;i<CAT_RULES.length;i++){ var r=CAT_RULES[i]; for(var j=0;j<r.kw.length;j++){ if(n.indexOf(r.kw[j])>=0) return r.cat; } }
   return null;
 }
-// Section (flux) probable selon la catégorie
-function guessKind(cat){ return (cat==="logement"||cat==="abo")?"fixed":"variable"; }
+// Section (flux) probable selon la catégorie (logement & abonnements = charges fixes)
+function guessKind(cat){ return (cat==="logement"||cat==="abo"||(cat&&cat.indexOf("log_")===0))?"fixed":"variable"; }
 
 // Normalise un libellé pour la comparaison (minuscules, sans accents/ponctuation)
 function normLabel(s){
