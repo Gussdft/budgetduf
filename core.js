@@ -127,6 +127,42 @@
     return out;
   }
 
+  // Montant net d'une ligne de dépense (après ce qui est couvert par des cagnottes)
+  function lineNet(line){
+    var covered = 0;
+    var pc = line.potCovers || [];
+    for(var i=0;i<pc.length;i++){ covered += pc[i].coveredAmount || 0; }
+    return (line.amount || 0) - covered;
+  }
+
+  // Bilan d'une année : totaux, évolution mois par mois, dépenses par catégorie.
+  // months keyé "YYYY-MM". Les dépenses sont nettes (part réellement payée par le foyer).
+  function annualSummary(months, year){
+    months = months || {};
+    var pad = function(n){ return (n < 10 ? "0" : "") + n; };
+    var revenus = 0, depenses = 0, epargne = 0;
+    var byMonth = [];
+    var byCat = {};      // catId (ou "__none") -> total net
+    for(var m=1;m<=12;m++){
+      var key = year + "-" + pad(m);
+      var data = months[key];
+      var t = data ? monthTotals(data) : {revenus:0, dep:0, saved:0};
+      revenus += t.revenus; depenses += t.dep; epargne += t.saved;
+      byMonth.push({month:m, revenus:t.revenus, depenses:t.dep, net:t.revenus - t.dep});
+      if(data){
+        var cats = ["fixed","variable","excep"];
+        for(var c=0;c<cats.length;c++){
+          var arr = data[cats[c]] || [];
+          for(var i=0;i<arr.length;i++){
+            var id = arr[i].cat || "__none";
+            byCat[id] = (byCat[id] || 0) + lineNet(arr[i]);
+          }
+        }
+      }
+    }
+    return {year:year, revenus:revenus, depenses:depenses, epargne:epargne, byMonth:byMonth, byCategory:byCat};
+  }
+
   var Core = {
     sumAmounts: sumAmounts,
     potCovered: potCovered,
@@ -136,7 +172,9 @@
     potBalance: potBalance,
     projectBalance: projectBalance,
     avgMonthlyNet: avgMonthlyNet,
-    forecast: forecast
+    forecast: forecast,
+    lineNet: lineNet,
+    annualSummary: annualSummary
   };
 
   if(typeof module !== "undefined" && module.exports){ module.exports = Core; }

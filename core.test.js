@@ -147,5 +147,33 @@ group("Projection de trésorerie");
   eq(down[3].balance, -200, "flux négatif → passe sous zéro");
 })();
 
+// ---------- bilan annuel ----------
+group("Bilan annuel : totaux & catégories");
+(function(){
+  var months = {
+    "2026-01":{revenus:[{amount:3000}],fixed:[{amount:1000,cat:"logement"}],variable:[{amount:300,cat:"alim"}],deposits:[{potId:"a",amount:200}]},
+    "2026-02":{revenus:[{amount:3000}],fixed:[{amount:1000,cat:"logement"}],variable:[{amount:400,cat:"alim"}]},
+    "2025-12":{revenus:[{amount:9999}]}  // autre année, ignorée
+  };
+  var b = Core.annualSummary(months, 2026);
+  eq(b.revenus, 6000, "revenus année");
+  eq(b.depenses, 2700, "dépenses année (1000+300 + 1000+400)");
+  eq(b.epargne, 200, "épargne année");
+  eq(b.byMonth.length, 12, "12 mois");
+  eq(b.byMonth[0].net, 1700, "janvier net = 3000-1300");
+  eq(b.byCategory.logement, 2000, "logement cumulé");
+  eq(b.byCategory.alim, 700, "alimentation cumulée");
+})();
+
+group("Bilan : dépense non catégorisée + couverture cagnotte");
+(function(){
+  var months = {
+    "2026-03":{excep:[{amount:300,cat:"loisirs",potCovers:[{coveredAmount:200}]},{amount:50}]}
+  };
+  var b = Core.annualSummary(months, 2026);
+  eq(b.byCategory.loisirs, 100, "loisirs net = 300 - 200 couverts");
+  eq(b.byCategory.__none, 50, "ligne sans catégorie → __none");
+})();
+
 console.log("\n" + (failed === 0 ? "✓ TOUS LES TESTS PASSENT" : "✗ ÉCHECS") + " — " + passed + " ok, " + failed + " ko\n");
 if(typeof process !== "undefined"){ process.exit(failed === 0 ? 0 : 1); }
