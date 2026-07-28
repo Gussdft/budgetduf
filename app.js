@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v71";
+const APP_VERSION = "v72";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -2256,25 +2256,37 @@ function ConfirmModal({title,message,onClose,onConfirm}){
       el("button",{style:{...S.saveBtn,background:"linear-gradient(135deg,#C8516C,#e05575)",boxShadow:"0 4px 14px #C8516C44",flex:1},onClick:onConfirm},"Supprimer")));
 }
 
-// ---- Import transactions bancaires (copier-coller) ----
+// ---- Import transactions bancaires (relevé PDF ou copier-coller) ----
 function parseTransactions(text){
-  var lines=text.split('\n');
+  var lines=(text||"").split('\n');
   var results=[];
-  // Regex : montant FR ex "1,35 €", "1 235,00 €" ou "645,00" (€ optionnel — relevés bancaires)
-  var amtRe=/([\d][\d\s]*[,.][\d]{2})\s*€?/;
+  // Montant à la française : décimale VIRGULE obligatoire (les dates "08.07" utilisent le point → ignorées)
+  var amtRe=/(\d[\d  . ]*,\d{2})/g;
+  // dates JJ.MM / JJ/MM (+ éventuelle année)
+  var dateTok=/\b\d{2}[.\/]\d{2}(?:[.\/]\d{2,4})?\b/g;
+  var dateLead=/^(?:\d{2}[.\/]\d{2}(?:[.\/]\d{2,4})?\s*)+/;
+  // lignes à ignorer (en-têtes, soldes, totaux, coordonnées…)
+  var noise=/(ancien solde|nouveau solde|solde |solde\b|report|total|sous-total|date\b|valeur\b|libell|montant|d[ée]bit|cr[ée]dit|iban|bic|www\.|agence|t[ée]l[ée]phone|relev[ée]|n° de compte|num[ée]ro de compte)/i;
   for(var i=0;i<lines.length;i++){
-    var line=lines[i].replace(/›/g,'').trim();
-    var m=line.match(amtRe);
-    if(!m) continue;
-    var amtStr=m[1].replace(/\s/g,'').replace(',','.');
-    var amt=parseFloat(amtStr);
-    if(isNaN(amt)||amt<=0) continue;
-    // merchant = tout ce qui est avant le montant
-    var merchant=line.slice(0,line.lastIndexOf(m[0])).replace(/\s{2,}/g,' ').trim();
-    if(!merchant) continue;
-    // ignorer les lignes qui ressemblent à des localisations ou dates
-    if(/^(il y a|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier|aujourd)/i.test(merchant)) continue;
-    results.push({id:uid(),label:merchant,amount:amt,kind:"variable",checked:true});
+    var raw=lines[i].replace(/›/g,'').replace(/[   ]+/g,' ').trim();
+    if(!raw||noise.test(raw)) continue;
+    // on retire d'abord TOUTES les dates (sinon "25/07 4,70" se lit "74,70")
+    var clean=raw.replace(dateTok,' ').replace(/\s+/g,' ').trim();
+    var matches=clean.match(amtRe);
+    if(!matches) continue;
+    // on prend le dernier montant de la ligne (colonne de droite)
+    var last=matches[matches.length-1];
+    var amt=parseFloat(last.replace(/[  . ]/g,'').replace(',','.'));
+    if(isNaN(amt)||amt<=0||amt>1000000) continue;
+    var label=clean.slice(0,clean.lastIndexOf(last));
+    label=label.replace(/\b\d{4,}\b/g,' ');      // n° de carte / références longues
+    label=label.replace(/[. ]+/g,' ').replace(/\s+/g,' ').trim();
+    label=label.replace(/^(il y a|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier|aujourd).*$/i,'');
+    if(label.length<3) continue;                 // ligne sans vrai libellé
+    if(/^[\d\s.,\/-]+$/.test(label)) continue;    // que des chiffres/dates
+    // Capitalisation douce (les relevés sont souvent tout en majuscules)
+    var pretty=label.toLowerCase().replace(/\b([a-zàâäéèêëîïôöùûüç])/g,function(c){return c.toUpperCase();});
+    results.push({id:uid(),label:pretty,amount:amt,kind:"variable",checked:true});
   }
   return results;
 }
