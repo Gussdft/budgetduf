@@ -130,6 +130,17 @@ const SECTIONS = {
   variable: { title:"Dépenses variables",       icon:"repeat", accent:"#F2B53C", sign:"−" },
   excep:    { title:"Dépenses exceptionnelles", icon:"zap",    accent:"#945ECF", sign:"−" },
 };
+// Catégories de dépenses personnalisables (pour le bilan annuel)
+const DEFAULT_CATEGORIES = [
+  {id:"alim",      label:"Alimentation", color:"#19A979"},
+  {id:"logement",  label:"Logement",     color:"#E8743B"},
+  {id:"transport", label:"Transport",    color:"#1D8BCE"},
+  {id:"loisirs",   label:"Loisirs",      color:"#945ECF"},
+  {id:"sante",     label:"Santé",        color:"#C8516C"},
+  {id:"abo",       label:"Abonnements",  color:"#13A4B4"},
+  {id:"enfants",   label:"Enfants",      color:"#F2B53C"},
+  {id:"autre",     label:"Autre",        color:"#6C8893"},
+];
 const POT_PALETTE = ["#19A979","#1D8BCE","#E8743B","#945ECF","#13A4B4","#C8516C","#F2B53C","#6C8893"];
 const POT_TYPES = {
   livret: {label:"Livret (A / LDDS / LEP)",  badge:"Livret", icon:"wallet",    hint:"Épargne liquide, défiscalisée",          plafond:22950,  color:"#1D8BCE"},
@@ -689,6 +700,7 @@ function App(){
   const [pots,setPots]         = useState([]);
   const [projects,setProjects] = useState([]);
   const [loans,setLoans]       = useState([]);
+  const [categories,setCategories] = useState(DEFAULT_CATEGORIES);
   const isWide = useIsWide(1000);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
@@ -726,10 +738,10 @@ function App(){
     if(undoTimer.current) clearTimeout(undoTimer.current);
   };
 
-  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
+  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
   useEffect(function(){
     if(!loaded) return;
-    var payload={months:months,pots:pots,projects:projects,loans:loans,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
     saveData(payload);
     if(!householdId||!db||syncingRef.current) return;
     if(syncTimer.current) clearTimeout(syncTimer.current);
@@ -737,7 +749,7 @@ function App(){
       lastSyncRef.current=Date.now();
       db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
     },1500);
-  },[months,pots,projects,loans,annualReturn,advisorMode,profile,loaded]);
+  },[months,pots,projects,loans,categories,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
   // Saisie rapide / import batch depuis iOS Raccourcis
@@ -793,7 +805,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -815,7 +827,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -899,6 +911,12 @@ function App(){
   const editLoan=function(id,upd){
     setLoans(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,upd):l;});});
   };
+  // ---- Catégories de dépenses (personnalisables) ----
+  const addCategory=function(c){setCategories(function(prev){return [...prev,Object.assign({id:uid()},c)];});};
+  const editCategory=function(id,upd){setCategories(function(prev){return prev.map(function(c){return c.id===id?Object.assign({},c,upd):c;});});};
+  const delCategory=function(id){setCategories(function(prev){return prev.filter(function(c){return c.id!==id;});});};
+  // Affecter une catégorie à une ligne de dépense (fixed / variable / excep)
+  const setLineCat=function(kind,id,catId){setMonthData(function(c){return Object.assign({},c,{[kind]:(c[kind]||[]).map(function(x){return x.id===id?Object.assign({},x,{cat:catId||undefined}):x;})});});};
   // Rembourser une dette : versement libre (montant variable) dans une cagnotte, tagué au prêt.
   // Compte comme de l'épargne du mois (réduit le non-affecté, reconstitue la cagnotte).
   // entries = [{potId, amount}] : un remboursement peut être réparti sur plusieurs cagnottes à la fois
@@ -1023,8 +1041,8 @@ function App(){
     return b;
   });
 
-  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
   if(authReady&&!user&&db) return el(LoginScreen,null);
