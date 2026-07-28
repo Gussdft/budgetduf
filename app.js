@@ -70,6 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
+const APP_VERSION = "v59";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1391,6 +1392,20 @@ function SettingsScreen(props){
   var sectionLabel={fontSize:12,fontWeight:700,color:"var(--text-3)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8,paddingLeft:4};
   return el("div",{style:{display:"flex",flexDirection:"column",gap:22}},
     el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Réglages"),
+
+    // Version + forçage de rechargement (utile en cas de cache PWA)
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"var(--surface)",borderRadius:14,padding:"12px 16px",boxShadow:"var(--shadow-card)"}},
+      el("div",null,
+        el("div",{style:{fontSize:13,fontWeight:600,color:"var(--text)"}},"Version de l'app"),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2,fontFamily:"ui-monospace,monospace"}},APP_VERSION)),
+      el("button",{onClick:function(){
+        try{
+          if(window.caches&&caches.keys){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k);});});}
+          if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});setTimeout(function(){window.location.reload(true);},300);});}
+          else{window.location.reload(true);}
+        }catch(e){window.location.reload(true);}
+      },style:{border:"none",borderRadius:10,padding:"9px 14px",background:"#1D8BCE18",color:"#1D8BCE",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}},
+        el(Icon,{name:"rotate-ccw",size:14,color:"#1D8BCE"}),"Mettre à jour")),
 
     // Section Affichage
     el("div",null,
