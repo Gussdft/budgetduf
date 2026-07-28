@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v73";
+const APP_VERSION = "v74";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -743,6 +743,7 @@ function App(){
   const [loans,setLoans]       = useState([]);
   const [categories,setCategories] = useState(DEFAULT_CATEGORIES);
   const [couple,setCouple] = useState(DEFAULT_COUPLE);
+  const [learnedCats,setLearnedCats] = useState({});
   const [bilanYear,setBilanYear] = useState(null);
   const [showCouple,setShowCouple] = useState(false);
   const isWide = useIsWide(1000);
@@ -782,10 +783,10 @@ function App(){
     if(undoTimer.current) clearTimeout(undoTimer.current);
   };
 
-  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple)); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
+  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
   useEffect(function(){
     if(!loaded) return;
-    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,couple:couple,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,couple:couple,learnedCats:learnedCats,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
     saveData(payload);
     if(!householdId||!db||syncingRef.current) return;
     if(syncTimer.current) clearTimeout(syncTimer.current);
@@ -793,7 +794,7 @@ function App(){
       lastSyncRef.current=Date.now();
       db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
     },1500);
-  },[months,pots,projects,loans,categories,couple,annualReturn,advisorMode,profile,loaded]);
+  },[months,pots,projects,loans,categories,couple,learnedCats,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
   // Saisie rapide / import batch depuis iOS Raccourcis
@@ -849,7 +850,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats);
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -871,7 +872,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats);
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -1091,8 +1092,8 @@ function App(){
     return b;
   });
 
-  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,couple,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,couple,learnedCats,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
   if(authReady&&!user&&db) return el(LoginScreen,null);
@@ -1311,6 +1312,7 @@ function App(){
       onConfirm:function(){modal.onConfirm();setModal(null);}}),
 
     (modal&&modal.kind==="import") && el(ImportModal,{onClose:function(){setModal(null);},categories:categories,
+      learned:learnedCats,onLearn:function(map){setLearnedCats(function(prev){return Object.assign({},prev,map);});},
       existingLines:[].concat((data.fixed||[]).map(function(x){return {id:x.id,label:x.label,kind:"fixed"};}),(data.variable||[]).map(function(x){return {id:x.id,label:x.label,kind:"variable"};}),(data.excep||[]).map(function(x){return {id:x.id,label:x.label,kind:"excep"};})),
       onApplyReel:function(map){
         setMonthData(function(c){var r=Object.assign({},c.reel||{});Object.keys(map).forEach(function(id){r[id]=(parseFloat(r[id])||0)+map[id];});return Object.assign({},c,{reel:r});});
@@ -2257,7 +2259,7 @@ function ConfirmModal({title,message,onClose,onConfirm}){
 }
 
 // ---- Import transactions bancaires (relevé PDF ou copier-coller) ----
-function parseTransactions(text){
+function parseTransactions(text,learned){
   var lines=(text||"").split('\n');
   var results=[];
   // Montant à la française : décimale VIRGULE obligatoire (les dates "08.07" utilisent le point → ignorées)
@@ -2279,14 +2281,19 @@ function parseTransactions(text){
     var amt=parseFloat(last.replace(/[  . ]/g,'').replace(',','.'));
     if(isNaN(amt)||amt<=0||amt>1000000) continue;
     var label=clean.slice(0,clean.lastIndexOf(last));
+    // Format Crédit Agricole : "Carte X6672 Monoprix Amiens" → "Monoprix Amiens"
+    label=label.replace(/^\s*(carte|virement|avoir|prlv|pr[ée]l[èe]vement|ch[èe]que|retrait|paiement|vir)\b\s*/i,'');
+    label=label.replace(/\bX\d{3,}\b/gi,' ');    // masque de carte
+    label=label.replace(/\bweb\b|\bvir inst de\b|\bde m\.?\b|\bde madame\b/gi,' ');
+    label=label.replace(/\*+\d*\*?/g,' ');       // refs type **4074*
     label=label.replace(/\b\d{4,}\b/g,' ');      // n° de carte / références longues
     label=label.replace(/[. ]+/g,' ').replace(/\s+/g,' ').trim();
     label=label.replace(/^(il y a|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier|aujourd).*$/i,'');
     if(label.length<3) continue;                 // ligne sans vrai libellé
     if(/^[\d\s.,\/-]+$/.test(label)) continue;    // que des chiffres/dates
     // Capitalisation douce (les relevés sont souvent tout en majuscules)
-    var pretty=label.toLowerCase().replace(/\b([a-zàâäéèêëîïôöùûüç])/g,function(c){return c.toUpperCase();});
-    var gcat=guessCategory(pretty);
+    var pretty=label.toLowerCase().replace(/(^|\s)([a-zàâäéèêëîïôöùûüç])/g,function(m,p,c){return p+c.toUpperCase();});
+    var gcat=guessCategory(pretty,learned);
     results.push({id:uid(),label:pretty,amount:amt,cat:gcat||"",kind:guessKind(gcat),checked:true});
   }
   return results;
@@ -2330,17 +2337,25 @@ function extractPdfText(file){
   });
 }
 
-// Devine la catégorie d'une opération d'après son libellé (marchands FR courants)
+// Devine la catégorie d'une opération d'après son libellé (marchands FR + relevé réel)
 var CAT_RULES=[
-  {cat:"alim",kw:["carrefour","leclerc","e leclerc","lidl","auchan","monoprix","franprix","intermarche","super u","hyper u","systeme u","casino","picard","biocoop","boulangerie","boucherie","aldi","cora","naturalia","grand frais","lidl","norma","action food","toogoodtogo"]},
-  {cat:"logement",kw:["loyer","edf","engie","total energie","totalenergies","veolia","suez","saur","free ","freebox","orange","sfr","bouygues","sosh","red by sfr","syndic","charges copro","assurance hab","maaf","matmut","macif","foncia"]},
-  {cat:"transport",kw:["sncf","ratp","uber","total ","totalenerg","essence","station","shell","esso","bp ","carburant","autoroute","vinci","aprr","sanef","peage","parking","navigo","blablacar","bolt","citiz","velib","tan ","keolis","ratp","oui.sncf","trainline","ryanair","air france","transavis"]},
-  {cat:"loisirs",kw:["netflix","spotify","disney","canal","cinema","ugc","pathe","gaumont","fnac","steam","playstation","xbox","nintendo","deezer","restaurant","mcdo","mcdonald","burger","kfc","starbucks","subway","spectacle","concert","decathlon","intersport","booking","airbnb","expedia"]},
-  {cat:"sante",kw:["pharmacie","doctolib","medecin","dentiste","laboratoire","labo ","opticien","optic","mutuelle","hopital","clinique","kine","osteo","ameli","cpam"]},
-  {cat:"abo",kw:["abonnement","apple.com","apple ","itunes","google","icloud","amazon prime","prime video","microsoft","adobe","gym","basic fit","basic-fit","fitness","salle de sport","neoness","onlyfans","patreon","audible","kindle","dropbox","openai","chatgpt"]},
-  {cat:"enfants",kw:["ecole","creche","cantine","nounou","assmat","peri scol","perisco","jouet","king jouet","joue club","okaidi","petit bateau","vertbaudet","kiabi enfant"]}
+  {cat:"alim",kw:["carrefour","leclerc","lidl","auchan","monoprix","franprix","intermarche","inter blanche","super u","hyper u","systeme u","casino","picard","biocoop","boulangerie","boucherie","aldi","cora","naturalia","grand frais","jf market","marie blachere","mtp distri","gf boulangerie","planchon","norma","toogoodtogo","g20"]},
+  {cat:"logement",kw:["loyer","edf","electricite de france","electricité de france","engie","total energie","totalenergies","veolia","suez","saur","free telecom","free mobile","freebox","free ","orange","sfr","bouygues","sosh","syndic","charges copro","leroy merlin","castorama","bricorama","brico depot","maif","maaf","matmut","macif","foncia","assurance hab"]},
+  {cat:"transport",kw:["sncf","sncf-voyageurs","sncf reseau","ratp","uber","essence","station","shell","esso","carburant","autoroute","vinci","aprr","sanef","effia park","easypark","peage","parking","navigo","blablacar","bolt","citiz","velib","keolis","sixt","hertz","europcar","relay","air france","ryanair","transavia"]},
+  {cat:"loisirs",kw:["euro disney","disney","supercell","ragnarok","steam","playstation","xbox","nintendo","netflix","spotify","deezer","canal","cinema","ugc","pathe","gaumont","fnac","restaurant","mc donald","mcdo","burger","kfc","starbucks","subway","club sandwich","kimbo","atmosfeeric","westfield","primark","zara","devred","markus","asos","amazon","booking","airbnb","expedia","decathlon","intersport","maxime hair","spectacle","concert"]},
+  {cat:"sante",kw:["pharmacie","mgen","doctolib","medecin","dentiste","laboratoire","opticien","optic","mutuelle","hopital","clinique","kine","osteo","ameli","cpam"]},
+  {cat:"abo",kw:["abonnement","spliiit","apple.com","apple ","itunes","icloud","google","amazon prime","prime video","microsoft","adobe","gym","basic fit","basic-fit","fitness","neoness","patreon","audible","dropbox","openai","chatgpt","canva"]},
+  {cat:"enfants",kw:["creche","cantine","nounou","assmat","peri scol","perisco","garderie","king jouet","joue club","okaidi","petit bateau","vertbaudet","orchestra"]}
 ];
-function guessCategory(label){
+// Clé marchand pour l'apprentissage (2 premiers tokens significatifs)
+function merchantKey(label){
+  var n=(label||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+  var toks=n.split(" ").filter(function(t){return t.length>2&&!/^\d+$/.test(t);});
+  return toks.slice(0,2).join(" ");
+}
+function guessCategory(label,learned){
+  var key=merchantKey(label);
+  if(learned&&key&&learned[key]) return learned[key];   // choix déjà appris
   var n=(" "+(label||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")+" ");
   for(var i=0;i<CAT_RULES.length;i++){ var r=CAT_RULES[i]; for(var j=0;j<r.kw.length;j++){ if(n.indexOf(r.kw[j])>=0) return r.cat; } }
   return null;
@@ -2372,7 +2387,8 @@ function bestLineMatch(label,lines){
 }
 
 function ImportModal(props){
-  var onClose=props.onClose, onImport=props.onImport, onApplyReel=props.onApplyReel;
+  var onClose=props.onClose, onImport=props.onImport, onApplyReel=props.onApplyReel, onLearn=props.onLearn;
+  var learned=props.learned||{};
   var lines=props.existingLines||[];
   var categories=props.categories||[];
   var catById=function(id){for(var i=0;i<categories.length;i++){if(categories[i].id===id)return categories[i];}return null;};
@@ -2382,11 +2398,12 @@ function ImportModal(props){
   var [mode,setMode]=useState(lines.length>0?"reel":"add"); // reel = comparer au prévu, add = nouvelles dépenses
   var [pdfBusy,setPdfBusy]=useState(false);
   var enrich=function(list){ return list.map(function(t){var m=bestLineMatch(t.label,lines);return Object.assign({},t,{matchId:m?m.id:""});}); };
-  var [txs,setTxs]=useState(function(){ return initText?enrich(parseTransactions(initText)):[]; });
+  var [txs,setTxs]=useState(function(){ return initText?enrich(parseTransactions(initText,learned)):[]; });
   var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"]];
+  function learnFrom(list){ if(!onLearn)return; var map={}; list.forEach(function(t){ if(t.cat){ var k=merchantKey(t.label); if(k) map[k]=t.cat; } }); if(Object.keys(map).length) onLearn(map); }
 
   function parse(){
-    var parsed=parseTransactions(text);
+    var parsed=parseTransactions(text,learned);
     if(parsed.length===0){alert("Aucune transaction détectée. Vérifie le texte collé.");return;}
     setTxs(enrich(parsed));
     setStep(2);
@@ -2395,7 +2412,7 @@ function ImportModal(props){
   function setKind(id,k){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{kind:k}):t;})); }
   function setCatK(id,c){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{cat:c}):t;})); }
   function setMatch(id,mid){ setTxs(txs.map(function(t){return t.id===id?Object.assign({},t,{matchId:mid}):t;})); }
-  function doImport(){ onImport(txs.filter(function(t){return t.checked;})); }
+  function doImport(){ var sel=txs.filter(function(t){return t.checked;}); learnFrom(sel); onImport(sel); }
   function doReel(){
     var map={};
     txs.forEach(function(t){ if(t.checked&&t.matchId){ map[t.matchId]=(map[t.matchId]||0)+t.amount; } });
@@ -2412,7 +2429,7 @@ function ImportModal(props){
     extractPdfText(f).then(function(txt){
       setPdfBusy(false);
       setText(txt);
-      var parsed=parseTransactions(txt);
+      var parsed=parseTransactions(txt,learned);
       if(parsed.length===0){ alert("PDF lu, mais aucune opération détectée automatiquement. Le texte est chargé — vérifie/ajuste puis Analyse."); return; }
       setTxs(enrich(parsed)); setStep(2);
     }).catch(function(err){ setPdfBusy(false); alert("Impossible de lire ce PDF. Essaie le copier-coller du texte à la place."); });
