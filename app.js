@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v66";
+const APP_VERSION = "v67";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1231,7 +1231,7 @@ function App(){
       return el("div",{style:{display:"flex",gap:20,alignItems:"flex-start"}},
         el("div",{style:{flex:"1 1 auto",minWidth:0,display:"flex",flexDirection:"column",gap:14}},
           actionsEl,importEl,
-          el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start"}},blocksEls)),
+          el("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:14,alignItems:"start"}},blocksEls)),
         el("div",{style:{flex:"0 0 330px",minWidth:0,position:"sticky",top:20,display:"flex",flexDirection:"column",gap:14}},reminderEl,summaryEl));
     }
     return el(React.Fragment,null,reminderEl,summaryEl,actionsEl,importEl,blocksEls);
