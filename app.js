@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v59";
+const APP_VERSION = "v60";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -3403,6 +3403,66 @@ function compoundFV(capital,versement,annualRate,months){
   if(r===0) return capital+versement*months;
   return capital*growth+versement*((growth-1)/r);
 }
+function DuelSimulator({onBack}){
+  const [initial,setInitial]=useState("1000");
+  const [monthly,setMonthly]=useState("200");
+  const [years,setYears]=useState("20");
+  const [ret,setRet]=useState("7");
+  const [ter,setTer]=useState("0.2");
+  const [avFee,setAvFee]=useState("0.5");
+  const [tmi,setTmi]=useState("30");
+  const [couple,setCouple]=useState(false);
+  var p={initial:parseFloat(initial)||0,monthly:parseFloat(monthly)||0,years:Math.round(parseFloat(years)||0),ret:parseFloat(ret)||0,ter:parseFloat(ter)||0,avFee:parseFloat(avFee)||0,tmi:parseFloat(tmi)||0,couple:couple};
+  var envs=[{k:"pea",label:"PEA",color:"#C8516C"},{k:"cto",label:"CTO",color:"#F2B53C"},{k:"av",label:"Assurance vie",color:"#1D8BCE"},{k:"per",label:"PER",color:"#945ECF"}];
+  var res=envs.map(function(e){return Object.assign({env:e},Fiscal.investEnvelope(e.k,p));});
+  var maxNet=res.reduce(function(m,r){return Math.max(m,r.netReel);},1);
+  var best=res.slice().sort(function(a,b){return b.netReel-a.netReel;})[0];
+  var num=function(label,val,setter,suffix){
+    return el("div",{style:{flex:"1 1 130px"}},
+      el("label",{style:S.fieldLabel},label),
+      el("div",{style:{display:"flex",alignItems:"center",gap:4}},
+        el("input",{type:"number",inputMode:"decimal",style:Object.assign({},S.input,{padding:"9px 11px"}),value:val,onChange:function(e){setter(e.target.value);}}),
+        suffix&&el("span",{style:{fontSize:13,color:"var(--text-3)",flexShrink:0}},suffix)));
+  };
+  return el("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    el(ToolBack,{onBack:onBack}),
+    el("h2",{style:{margin:0,fontSize:20,fontWeight:800}},"Duel des enveloppes"),
+    el(ToolInfo,{color:"#C8516C"},"Mêmes versements, mêmes marchés — seule la fiscalité de l'enveloppe change. Compare le capital NET à la sortie (fiscalité 2026, hypothèses simplifiées). PEA & CTO en direct, Assurance-vie & PER avec frais de gestion ; le PER déduit tes versements à l'entrée mais les réimpose à la sortie."),
+    el("div",{style:S.section},
+      el("div",{style:{display:"flex",flexWrap:"wrap",gap:12}},
+        num("Versement initial (€)",initial,setInitial),
+        num("Versement mensuel (€)",monthly,setMonthly),
+        num("Durée (ans)",years,setYears),
+        num("Rendement espéré",ret,setRet,"%/an"),
+        num("Frais de support (TER)",ter,setTer,"%/an"),
+        num("Frais de gestion AV/PER",avFee,setAvFee,"%/an"),
+        num("Ta TMI",tmi,setTmi,"%")),
+      el("div",{style:{marginTop:12}},
+        el("label",{style:S.fieldLabel},"Ta situation"),
+        el("div",{style:{display:"flex",gap:8}},
+          el("button",{onClick:function(){setCouple(false);},style:{flex:1,padding:"9px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:couple?600:700,fontSize:13,background:couple?"var(--surface-2)":"#C8516C18",color:couple?"var(--text-3)":"#C8516C"}},"Seul·e"),
+          el("button",{onClick:function(){setCouple(true);},style:{flex:1,padding:"9px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:couple?700:600,fontSize:13,background:couple?"#C8516C18":"var(--surface-2)",color:couple?"#C8516C":"var(--text-3)"}},"En couple")))),
+    // Barres capital net
+    el("div",{style:S.section},
+      el("div",{style:{fontSize:13,fontWeight:700,color:"var(--text-2)",marginBottom:4}},"Capital net à la sortie"),
+      el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginBottom:16}},"Ce qu'il te reste vraiment, une fois frais et impôts passés."),
+      el("div",{style:{display:"flex",flexDirection:"column",gap:14}},res.map(function(r){
+        var pct=Math.round(r.netReel/maxNet*100);
+        var isBest=r.env.k===best.env.k;
+        return el("div",{key:r.env.k},
+          el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}},
+            el("span",{style:{fontSize:13.5,fontWeight:700,color:"var(--text)",display:"flex",alignItems:"center",gap:6}},r.env.label,isBest&&el("span",{style:{fontSize:10,fontWeight:800,color:"#19A979",background:"#19A97918",borderRadius:5,padding:"1px 6px"}},"✓ meilleur")),
+            el("span",{style:{fontSize:15,fontWeight:800,color:r.env.color}},fmt(r.capitalNet))),
+          el("div",{style:{height:12,background:"var(--border-2)",borderRadius:6,overflow:"hidden"}},
+            el("div",{style:{height:"100%",width:Math.max(2,pct)+"%",background:r.env.color,borderRadius:6,transition:"width .4s ease"}})),
+          el("div",{style:{fontSize:11,color:"var(--text-3)",marginTop:4,display:"flex",gap:10,flexWrap:"wrap"}},
+            el("span",null,"frais − "+fmt(r.fraisCumules)),
+            el("span",null,"impôts − "+fmt(r.impots)),
+            r.economieEntree>0&&el("span",{style:{color:"#19A979"}},"économie entrée + "+fmt(r.economieEntree))));
+      }))),
+    el(ToolInfo,{color:"#945ECF"},"Le PER affiche un capital de sortie plus faible car tes versements, déduits à l'entrée, sont réimposés au retrait — mais l'économie d'impôt encaissée en route (ligne verte) compense en partie. Choisir la bonne enveloppe avant même de choisir les supports, c'est souvent la décision la plus rentable. Hypothèses simplifiées, hors cas particuliers."));
+}
+
 function CompoundInterestSimulator({onBack}){
   const [capital,setCapital]=useState("");
   const [versement,setVersement]=useState("");
@@ -3924,6 +3984,7 @@ function OutilsScreen(props){
   if(view==="projection") return el(ProjectionSimulator,{onBack:back,startCapital:startCapital});
   if(view==="immo") return el(ImmoSimulator,{onBack:back});
   if(view==="per") return el(PerSimulator,{onBack:back});
+  if(view==="duel") return el(DuelSimulator,{onBack:back});
   var categories=[
     {
       label:"Fiscalité",icon:"percent",color:"#C8516C",
@@ -3946,6 +4007,7 @@ function OutilsScreen(props){
     {
       label:"Épargne & Patrimoine",icon:"trending-up",color:"#1D8BCE",
       tools:[
+        {id:"duel",icon:"git-compare",color:"#C8516C",title:"Duel des enveloppes",sub:"PEA vs CTO vs Assurance-vie vs PER — capital net à la sortie (fiscalité 2026)"},
         {id:"compose",icon:"trending-up",color:"#19A979",title:"Intérêts composés",sub:"Projette la croissance d'un capital avec versements réguliers et taux de rendement"},
         {id:"projection",icon:"target",color:"#1D8BCE",title:"Projection long terme",sub:"Simule la valeur de ton patrimoine à la retraite ou à un âge cible"},
         {id:"bilan",icon:"scale",color:"#19A979",title:"Bilan patrimonial net",sub:"Synthèse actifs − passifs : immo, voiture, placements, dettes"},

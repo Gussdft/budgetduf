@@ -58,5 +58,31 @@ group("Capacité d'emprunt (inverse de la mensualité)");
 })();
 eq(F.loanCapacity(1000, 0, 12), 12000, "taux 0 % → mensualité × durée");
 
+group("Valeur future (capital + versements)");
+(function(){
+  eq(F.futureValue(0, 100, 1, 0), 1200, "1 an, 100/mois, 0 % → 1200");
+  eq(Math.round(F.futureValue(1000, 0, 1, 0.10)), 1100, "1000 à 10 % sur 1 an → 1100");
+})();
+
+group("Enveloppes — net de frais et d'impôts");
+(function(){
+  var p = {initial:1000, monthly:200, years:20, ret:7, ter:0.2, avFee:0.5, tmi:30, couple:false};
+  var pea = F.investEnvelope("pea", p);
+  var cto = F.investEnvelope("cto", p);
+  var av  = F.investEnvelope("av",  p);
+  var per = F.investEnvelope("per", p);
+  eq(pea.verse, 49000, "total versé = 1000 + 200×12×20");
+  // PEA n'a pas de frais AV → valeur avant impôt > AV
+  var ok1 = pea.valeurAvantImpot > av.valeurAvantImpot; eq(ok1, true, "AV rogne plus que PEA (frais de gestion)");
+  // PEA (PS 17,2 %) laisse plus net que CTO (PFU 30 %) à valeur égale
+  var ok2 = pea.capitalNet > cto.capitalNet; eq(ok2, true, "PEA plus avantageux que CTO à l'impôt");
+  // PER : économie d'impôt à l'entrée = versé × TMI
+  eq(Math.round(per.economieEntree), Math.round(49000*0.30), "PER : économie d'entrée = versé × TMI");
+  // impôts positifs partout
+  var ok3 = pea.impots>0 && cto.impots>0 && av.impots>0; eq(ok3, true, "impôts calculés sur les gains");
+  // frais AV > 0 (TER + frais gestion)
+  var ok4 = av.fraisCumules > pea.fraisCumules; eq(ok4, true, "AV a plus de frais cumulés que PEA");
+})();
+
 console.log("\n" + (failed === 0 ? "✓ TOUS LES TESTS PASSENT" : "✗ ÉCHECS") + " — " + passed + " ok, " + failed + " ko\n");
 if(typeof process !== "undefined"){ process.exit(failed === 0 ? 0 : 1); }
