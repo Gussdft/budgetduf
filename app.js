@@ -141,6 +141,8 @@ const DEFAULT_CATEGORIES = [
   {id:"enfants",   label:"Enfants",      color:"#F2B53C"},
   {id:"autre",     label:"Autre",        color:"#6C8893"},
 ];
+// Configuration du couple (deux partenaires + règle de partage des charges)
+const DEFAULT_COUPLE = {enabled:false, rule:"prorata", a:{name:"Moi",color:"#1D8BCE"}, b:{name:"Mon/ma partenaire",color:"#945ECF"}};
 const POT_PALETTE = ["#19A979","#1D8BCE","#E8743B","#945ECF","#13A4B4","#C8516C","#F2B53C","#6C8893"];
 const POT_TYPES = {
   livret: {label:"Livret (A / LDDS / LEP)",  badge:"Livret", icon:"wallet",    hint:"Épargne liquide, défiscalisée",          plafond:22950,  color:"#1D8BCE"},
@@ -431,6 +433,28 @@ function CategoryPickModal({categories,current,onClose,onPick}){
     el("button",{onClick:function(){onPick(null);},style:{marginTop:16,width:"100%",padding:11,borderRadius:11,border:"none",background:"var(--surface-2)",color:"var(--text-3)",fontSize:13.5,fontWeight:600,cursor:"pointer"}},"Aucune catégorie"));
 }
 
+function WhoPickModal({couple,field,current,onClose,onPick}){
+  couple = couple || DEFAULT_COUPLE;
+  var isIncome = field === "who";
+  var title = isIncome ? "À qui ce revenu ?" : "Qui a payé ?";
+  var opts = [
+    {v:"a", label:couple.a.name, color:couple.a.color},
+    {v:"b", label:couple.b.name, color:couple.b.color},
+    {v:null, label:isIncome ? "Revenu commun" : "Compte commun", color:"#6C8893"}
+  ];
+  return el(Modal,{title:title,onClose:onClose},
+    el("p",{style:{fontSize:12.5,color:"var(--text-3)",marginBottom:14,lineHeight:1.5}},isIncome?"Sert à calculer le poids de chacun dans le foyer.":"Sert à calculer qui doit combien à qui en fin de mois."),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+      opts.map(function(o){
+        var on=(current||null)===o.v;
+        return el("button",{key:String(o.v),onClick:function(){onPick(o.v);},
+          style:{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:12,cursor:"pointer",
+            border:"1.5px solid "+(on?o.color:"var(--border)"),background:on?o.color+"18":"var(--field-bg)",
+            color:on?o.color:"var(--text)",fontSize:14.5,fontWeight:on?700:600}},
+          el("span",{style:{width:11,height:11,borderRadius:4,background:o.color}}),o.label);
+      })));
+}
+
 function ReimburseModal({loan,remaining,pots,onClose,onSave}){
   // Répartition libre sur plusieurs cagnottes à la fois : un montant par cagnotte
   const [amounts,setAmounts]=useState({});
@@ -717,7 +741,9 @@ function App(){
   const [projects,setProjects] = useState([]);
   const [loans,setLoans]       = useState([]);
   const [categories,setCategories] = useState(DEFAULT_CATEGORIES);
+  const [couple,setCouple] = useState(DEFAULT_COUPLE);
   const [bilanYear,setBilanYear] = useState(null);
+  const [showCouple,setShowCouple] = useState(false);
   const isWide = useIsWide(1000);
   const [loaded,setLoaded]     = useState(false);
   const [modal,setModal]       = useState(null);
@@ -755,10 +781,10 @@ function App(){
     if(undoTimer.current) clearTimeout(undoTimer.current);
   };
 
-  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
+  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple)); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
   useEffect(function(){
     if(!loaded) return;
-    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,couple:couple,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
     saveData(payload);
     if(!householdId||!db||syncingRef.current) return;
     if(syncTimer.current) clearTimeout(syncTimer.current);
@@ -766,7 +792,7 @@ function App(){
       lastSyncRef.current=Date.now();
       db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
     },1500);
-  },[months,pots,projects,loans,categories,annualReturn,advisorMode,profile,loaded]);
+  },[months,pots,projects,loans,categories,couple,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
   // Saisie rapide / import batch depuis iOS Raccourcis
@@ -822,7 +848,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -844,7 +870,7 @@ function App(){
         if(d.months)setMonths(d.months);
         if(d.pots)setPots(d.pots);
         if(d.projects)setProjects(d.projects);
-        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);
+        if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
@@ -934,6 +960,8 @@ function App(){
   const delCategory=function(id){setCategories(function(prev){return prev.filter(function(c){return c.id!==id;});});};
   // Affecter une catégorie à une ligne de dépense (fixed / variable / excep)
   const setLineCat=function(kind,id,catId){setMonthData(function(c){return Object.assign({},c,{[kind]:(c[kind]||[]).map(function(x){return x.id===id?Object.assign({},x,{cat:catId||undefined}):x;})});});};
+  // Affecter un champ couple à une ligne (who pour un revenu, paidBy pour une dépense)
+  const setLineField=function(kind,id,field,val){setMonthData(function(c){var u={};u[field]=val||undefined;return Object.assign({},c,{[kind]:(c[kind]||[]).map(function(x){return x.id===id?Object.assign({},x,u):x;})});});};
   // Rembourser une dette : versement libre (montant variable) dans une cagnotte, tagué au prêt.
   // Compte comme de l'épargne du mois (réduit le non-affecté, reconstitue la cagnotte).
   // entries = [{potId, amount}] : un remboursement peut être réparti sur plusieurs cagnottes à la fois
@@ -1058,8 +1086,8 @@ function App(){
     return b;
   });
 
-  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,couple,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
   if(authReady&&!user&&db) return el(LoginScreen,null);
@@ -1105,8 +1133,8 @@ function App(){
 
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
-      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);}})
-      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);}})),
+      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null})
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && (function(){
@@ -1176,6 +1204,8 @@ function App(){
         el(Icon,{name:"upload",size:14,color:"#19A979"})," Importer depuis l'appli bancaire");
     var blocksEls=Object.entries(SECTIONS).map(([kind,cfg])=>el(FastBlock,{key:kind,kind,cfg,items:data[kind],
         reel:data.reel||{},showPrevus:showPrevus&&kind!=="revenus",categories:categories,
+        couple:couple.enabled?couple:null,
+        onWho:couple.enabled?function(id){setModal({kind:"whopick",field:kind==="revenus"?"who":"paidBy",lineKind:kind,lineId:id});}:null,
         onCat:kind!=="revenus"?function(id){setModal({kind:"catpick",lineKind:kind,lineId:id});}:null,
         onAmount:(id,v)=>setAmount(kind,id,v),onReel:(id,v)=>setReelAmount(id,v),onDel:id=>delLine(kind,id),onRename:(id,l)=>renameLine(kind,id,l),onAdd:l=>addLine(kind,l),onToggleRecurring:function(id){toggleRecurring(kind,id);}}));
     if(isWide){
@@ -1211,12 +1241,16 @@ function App(){
       onExport:exportJSON,
       onImport:importJSON,
       user:user,db:db,
-      categories:categories,onAddCategory:addCategory,onEditCategory:editCategory,onDelCategory:delCategory
+      categories:categories,onAddCategory:addCategory,onEditCategory:editCategory,onDelCategory:delCategory,
+      couple:couple,onSetCouple:setCouple
     })
     ), // fin du panneau d'onglet
 
     // ---- Bilan annuel (plein écran) ----
     (bilanYear!==null) && el(BilanAnnuel,{months:months,year:bilanYear,categories:categories,onChangeYear:function(d){setBilanYear(bilanYear+d);},onClose:function(){setBilanYear(null);}}),
+
+    // ---- Équilibre du couple (plein écran) ----
+    showCouple && el(CoupleBalanceScreen,{data:data,couple:couple,monthLabel:MONTHS_FR[month]+" "+year,onClose:function(){setShowCouple(false);}}),
 
     // ---- barre d'onglets en bas (mobile uniquement ; PC = barre latérale) ----
     !isWide && el("nav",{style:S.tabBar},
@@ -1238,6 +1272,7 @@ function App(){
     (modal&&modal.kind==="newloan") && el(LoanModal,{pots:pots,onClose:()=>setModal(null),onSave:function(loan){addLoan(loan);setModal(null);}}),
     (modal&&modal.kind==="reimburse") && el(ReimburseModal,{loan:modal.loan,remaining:modal.remaining,pots:pots,onClose:()=>setModal(null),onSave:function(entries,note){reimburseLoan(modal.loan.id,entries,note);setModal(null);}}),
     (modal&&modal.kind==="catpick") && el(CategoryPickModal,{categories:categories,current:((data[modal.lineKind]||[]).find(function(x){return x.id===modal.lineId;})||{}).cat,onClose:()=>setModal(null),onPick:function(catId){setLineCat(modal.lineKind,modal.lineId,catId);setModal(null);}}),
+    (modal&&modal.kind==="whopick") && el(WhoPickModal,{couple:couple,field:modal.field,current:((data[modal.lineKind]||[]).find(function(x){return x.id===modal.lineId;})||{})[modal.field],onClose:()=>setModal(null),onPick:function(v){setLineField(modal.lineKind,modal.lineId,modal.field,v);setModal(null);}}),
     (modal&&modal.kind==="confirmdel") && el(ConfirmModal,{
       title:"Supprimer la cagnotte",
       message:"Supprimer « "+modal.potLabel+" » et tous ses versements ?",
@@ -1276,6 +1311,30 @@ function App(){
         el("button",{onClick:doUndo,style:{border:"none",borderRadius:10,padding:"8px 16px",fontWeight:800,fontSize:13.5,cursor:"pointer",background:"linear-gradient(135deg,#1D8BCE,#19A979)",color:"#fff"}},"↩ Annuler"),
         el("button",{onClick:function(){setUndoToast(null);if(undoTimer.current)clearTimeout(undoTimer.current);},style:{border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:13,cursor:"pointer",background:"transparent",color:"#8a94a6"}},"OK")))
   );
+}
+
+// ---- Réglages du couple ----
+function CoupleSettings({couple,onSetCouple}){
+  couple = couple || DEFAULT_COUPLE;
+  var set=function(upd){ onSetCouple(Object.assign({},couple,upd)); };
+  var setP=function(k,upd){ var o={}; o[k]=Object.assign({},couple[k],upd); onSetCouple(Object.assign({},couple,o)); };
+  var box={background:"var(--surface)",borderRadius:18,padding:"6px 16px",boxShadow:"var(--shadow-card)"};
+  var row={display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"13px 0",borderBottom:"1px solid var(--border-2)"};
+  var inp={border:"1px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:14,background:"var(--field-bg)",color:"var(--text)",outline:"none",width:150,textAlign:"right"};
+  var ruleBtn=function(v,label){var on=couple.rule===v;return el("button",{onClick:function(){set({rule:v});},style:{flex:1,padding:"8px 6px",borderRadius:9,border:"none",cursor:"pointer",fontSize:12.5,fontWeight:on?700:600,background:on?"#1D8BCE18":"var(--surface-2)",color:on?"#1D8BCE":"var(--text-3)"}},label);};
+  return el("div",{style:box},
+    el("div",{style:row},
+      el("div",null,el("div",{style:{fontSize:15,color:"var(--text)",fontWeight:500}},"Activer le mode couple"),
+        el("div",{style:{fontSize:12,color:"var(--text-3)",marginTop:2}},"Répartition des charges & « qui doit combien »")),
+      el(Switch,{on:couple.enabled,color:"#945ECF",onToggle:function(){set({enabled:!couple.enabled});}})),
+    couple.enabled&&el(React.Fragment,null,
+      el("div",{style:row},el("span",{style:{display:"flex",alignItems:"center",gap:8}},el("span",{style:{width:11,height:11,borderRadius:4,background:couple.a.color}}),"Partenaire 1"),
+        el("input",{value:couple.a.name,onChange:function(e){setP("a",{name:e.target.value});},style:inp})),
+      el("div",{style:row},el("span",{style:{display:"flex",alignItems:"center",gap:8}},el("span",{style:{width:11,height:11,borderRadius:4,background:couple.b.color}}),"Partenaire 2"),
+        el("input",{value:couple.b.name,onChange:function(e){setP("b",{name:e.target.value});},style:inp})),
+      el("div",{style:{padding:"13px 0"}},
+        el("div",{style:{fontSize:13,color:"var(--text-2)",marginBottom:8}},"Répartition des charges communes"),
+        el("div",{style:{display:"flex",gap:8}},ruleBtn("prorata","Au prorata des revenus"),ruleBtn("egal","50 / 50")))));
 }
 
 // ---- Gestion des catégories (dans Réglages) ----
@@ -1342,6 +1401,11 @@ function SettingsScreen(props){
     el("div",null,
       el("div",{style:sectionLabel},"Catégories de dépenses"),
       el(CatManager,{categories:props.categories,onAdd:props.onAddCategory,onEdit:props.onEditCategory,onDel:props.onDelCategory})),
+
+    // Section Couple
+    el("div",null,
+      el("div",{style:sectionLabel},"Finances du couple"),
+      el(CoupleSettings,{couple:props.couple,onSetCouple:props.onSetCouple})),
 
     // Section Foyer
     (user&&db) && el("div",null,
@@ -1776,8 +1840,17 @@ function flowRow(icon,color,label,val,valColor){
     el("span",{style:{...S.flowVal,color:valColor}},val));
 }
 
-function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring,categories,onCat}){
+function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRename,onAdd,onToggleRecurring,categories,onCat,couple,onWho}){
   var catById=function(id){ var cs=categories||[]; for(var i=0;i<cs.length;i++){ if(cs[i].id===id) return cs[i]; } return null; };
+  var whoChip=function(it,field){
+    if(!onWho||!couple) return null;
+    var v=it[field]; var p=v==="a"?couple.a:(v==="b"?couple.b:null);
+    var label=p?p.name:(field==="who"?"commun":"commun");
+    var color=p?p.color:"#6C8893";
+    return el("button",{onClick:function(){onWho(it.id);},style:{display:"inline-flex",alignItems:"center",gap:5,padding:"2px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:10.5,fontWeight:600,background:color+"18",color:color}},
+      el("span",{style:{width:7,height:7,borderRadius:2,background:color}}),
+      (field==="paidBy"?"payé : ":"")+label);
+  };
   var potFundingItems=kind==="revenus"?(items||[]).filter(function(x){return x.fromPot;}):[];
   var realItems=kind==="revenus"?(items||[]).filter(function(x){return !x.fromPot;}):items;
   const total=realItems.reduce((s,x)=>s+(x.amount||0),0);
@@ -1829,12 +1902,15 @@ function FastBlock({kind,cfg,items,reel,showPrevus,onAmount,onReel,onDel,onRenam
             el("span",{style:S.eur},"€")),
           onToggleRecurring&&el("button",{title:it.recurring?"Récurrent (actif)":"Marquer récurrent",style:{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:it.recurring?"#1D8BCE":"var(--del)",display:"flex",alignItems:"center"},onClick:function(){onToggleRecurring(it.id);}},el(Icon,{name:"repeat",size:14,color:it.recurring?"#1D8BCE":"var(--del)"})),
           el("button",{style:S.lineDel,onClick:function(){onDel(it.id);}},el(Icon,{name:"x",size:15}))),
-        onCat&&(function(){
-          var c=catById(it.cat);
-          return el("button",{onClick:function(){onCat(it.id);},style:{alignSelf:"flex-start",display:"inline-flex",alignItems:"center",gap:5,margin:"-1px 0 5px 22px",padding:"2px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:10.5,fontWeight:600,background:c?c.color+"18":"var(--surface-2)",color:c?c.color:"var(--text-3)"}},
-            c?el("span",{style:{width:7,height:7,borderRadius:2,background:c.color}}):el(Icon,{name:"plus",size:10,color:"var(--text-3)"}),
-            c?c.label:"catégorie");
-        })(),
+        (onCat||onWho)&&el("div",{style:{display:"flex",flexWrap:"wrap",gap:6,margin:"-1px 0 6px 22px"}},
+          onCat&&(function(){
+            var c=catById(it.cat);
+            return el("button",{onClick:function(){onCat(it.id);},style:{display:"inline-flex",alignItems:"center",gap:5,padding:"2px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:10.5,fontWeight:600,background:c?c.color+"18":"var(--surface-2)",color:c?c.color:"var(--text-3)"}},
+              c?el("span",{style:{width:7,height:7,borderRadius:2,background:c.color}}):el(Icon,{name:"plus",size:10,color:"var(--text-3)"}),
+              c?c.label:"catégorie");
+          })(),
+          (onWho&&kind==="revenus")&&whoChip(it,"who"),
+          (onWho&&kind!=="revenus")&&whoChip(it,"paidBy")),
         it.potCovers&&it.potCovers.length>0&&el("div",{style:{margin:"-2px 0 6px 22px"}},
           it.potCovers.map(function(pc,pci){
             var totalCovers=(it.potCovers||[]).reduce(function(s,c){return s+c.coveredAmount;},0);
@@ -4041,6 +4117,48 @@ function BilanAnnuel({months,year,categories,onChangeYear,onClose}){
         })))));
 }
 
+// ---- Équilibre du couple (plein écran) ----
+function CoupleBalanceScreen({data,couple,monthLabel,onClose}){
+  couple = couple || DEFAULT_COUPLE;
+  var r = Core.coupleBalance(data, couple);
+  var pct=function(x){ return Math.round(x*100); };
+  var box={background:"var(--surface)",borderRadius:18,padding:18,boxShadow:"var(--shadow-card)"};
+  var partnerCard=function(p,income,ratio,share,paid){
+    return el("div",{style:Object.assign({},box,{borderTop:"3px solid "+p.color})},
+      el("div",{style:{fontSize:15,fontWeight:800,marginBottom:8}},p.name),
+      el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}},el("span",{style:{color:"var(--text-3)"}},"Revenu"),el("span",{style:{fontWeight:700}},fmt(income))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}},el("span",{style:{color:"var(--text-3)"}},"Poids dans le foyer"),el("span",{style:{fontWeight:700,color:p.color}},pct(ratio)+" %")),
+      el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}},el("span",{style:{color:"var(--text-3)"}},"Part équitable des charges"),el("span",{style:{fontWeight:700}},fmt(share))),
+      el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:13}},el("span",{style:{color:"var(--text-3)"}},"A réellement payé"),el("span",{style:{fontWeight:700}},fmt(paid))));
+  };
+  var owes=r.owes;
+  var from=owes?(owes.from==="a"?couple.a:couple.b):null;
+  var to=owes?(owes.to==="a"?couple.a:couple.b):null;
+  return el("div",{style:{position:"fixed",inset:0,zIndex:120,background:"var(--bg-gradient,var(--bg))",overflowY:"auto",WebkitOverflowScrolling:"touch"}},
+    el("div",{style:{maxWidth:820,margin:"0 auto",padding:"calc(20px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom))",display:"flex",flexDirection:"column",gap:16}},
+      el("div",{style:{display:"flex",alignItems:"center",gap:12}},
+        el("button",{onClick:onClose,style:{border:"none",background:"var(--surface-2)",borderRadius:11,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}},el(Icon,{name:"chevron-left",size:20})),
+        el("div",null,
+          el("div",{style:{fontSize:12,color:"var(--text-3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.5px"}},"Équilibre du couple"),
+          el("div",{style:{fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}},monthLabel))),
+      // règlement
+      el("div",{style:{background:owes?"linear-gradient(135deg,#945ECF,#a875e0)":"linear-gradient(135deg,#19A979,#15b389)",borderRadius:20,padding:"22px 24px",color:"#fff"}},
+        owes
+          ? el(React.Fragment,null,
+              el("div",{style:{fontSize:13,opacity:.9,fontWeight:600}},"Pour équilibrer ce mois"),
+              el("div",{style:{fontSize:26,fontWeight:800,letterSpacing:"-0.5px",marginTop:4}},from.name+" doit "+fmt(owes.amount)+" à "+to.name),
+              el("div",{style:{fontSize:12.5,opacity:.9,marginTop:6}},"Charges communes réglées : "+fmt(r.total)+" · règle "+(couple.rule==="egal"?"50 / 50":"au prorata des revenus")))
+          : el(React.Fragment,null,
+              el("div",{style:{fontSize:20,fontWeight:800}},"Comptes équilibrés 🎉"),
+              el("div",{style:{fontSize:12.5,opacity:.9,marginTop:4}},"Chacun a payé sa juste part des charges communes."))),
+      // partenaires
+      el("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:14}},
+        partnerCard(couple.a,r.incomeA,r.ratioA,r.shareA,r.paidA),
+        partnerCard(couple.b,r.incomeB,r.ratioB,r.shareB,r.paidB)),
+      el("div",{style:Object.assign({},box,{fontSize:12.5,color:"var(--text-3)",lineHeight:1.6})},
+        "Renseigne « à qui » sur chaque revenu et « qui a payé » sur chaque dépense (puces sous les lignes du budget). Seules les charges communes avec un payeur entrent dans le calcul ; les dépenses perso et les lignes sans payeur sont ignorées.")));
+}
+
 // ---- Prévision de trésorerie (épargne projetée sur les mois à venir) ----
 function ForecastCard(props){
   var startBalance=props.startBalance||0;
@@ -4221,6 +4339,7 @@ function DesktopDashboard(props){
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       budgetCard(),cagnottesCard(),loansCard(),projetsCard()),
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}),
+    props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
       el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
       el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Bilan de l'année"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Revenus, dépenses et répartition par catégorie sur l'année")),
@@ -4307,6 +4426,7 @@ function DashboardScreen(props){
 
     // --- Prévision de trésorerie ---
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
+    props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:20,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
       el("span",{style:{width:40,height:40,borderRadius:11,background:"#1D8BCE18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"file-text",size:20,color:"#1D8BCE"})),
       el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Bilan de l'année"),el("span",{style:{display:"block",fontSize:12,color:"var(--text-3)"}},"Revenus, dépenses, catégories")),
