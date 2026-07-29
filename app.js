@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v78";
+const APP_VERSION = "v79";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -778,6 +778,7 @@ function App(){
   const [categories,setCategories] = useState(DEFAULT_CATEGORIES);
   const [couple,setCouple] = useState(DEFAULT_COUPLE);
   const [learnedCats,setLearnedCats] = useState({});
+  const [budgetMethod,setBudgetMethod] = useState("50/30/20");
   const [bilanYear,setBilanYear] = useState(null);
   const [showCouple,setShowCouple] = useState(false);
   const isWide = useIsWide(1000);
@@ -817,10 +818,10 @@ function App(){
     if(undoTimer.current) clearTimeout(undoTimer.current);
   };
 
-  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
+  useEffect(()=>{ const d=loadData(); var loadedMonths={}; if(d){ loadedMonths=d.months||{}; setMonths(loadedMonths); setPots(d.pots||[]); setProjects(d.projects||[]); setLoans(d.loans||[]); if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats); if(d.settings){ if(typeof d.settings.annualReturn==="number") setAnnualReturn(d.settings.annualReturn); if(typeof d.settings.advisorMode==="boolean") setAdvisorMode(d.settings.advisorMode); if(d.settings.profile) setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile)); if(d.settings.budgetMethod) setBudgetMethod(d.settings.budgetMethod); } } setLoaded(true); setTimeout(function(){autoFillRecurring(loadedMonths);},0); },[]);
   useEffect(function(){
     if(!loaded) return;
-    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,couple:couple,learnedCats:learnedCats,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile}};
+    var payload={months:months,pots:pots,projects:projects,loans:loans,categories:categories,couple:couple,learnedCats:learnedCats,settings:{annualReturn:annualReturn,advisorMode:advisorMode,profile:profile,budgetMethod:budgetMethod}};
     saveData(payload);
     if(!householdId||!db||syncingRef.current) return;
     if(syncTimer.current) clearTimeout(syncTimer.current);
@@ -828,7 +829,7 @@ function App(){
       lastSyncRef.current=Date.now();
       db.from("budget_data").upsert({household_id:householdId,data:payload,updated_at:new Date().toISOString()}).then(function(){});
     },1500);
-  },[months,pots,projects,loans,categories,couple,learnedCats,annualReturn,advisorMode,profile,loaded]);
+  },[months,pots,projects,loans,categories,couple,learnedCats,budgetMethod,annualReturn,advisorMode,profile,loaded]);
   useEffect(()=>{ document.documentElement.setAttribute("data-theme",THEME_ATTR[theme]||"auto"); try{ localStorage.setItem(THEME_KEY,theme); }catch(e){} },[theme]);
   useEffect(function(){ saveSettings({showPrevus:showPrevus}); },[showPrevus]);
   // Saisie rapide / import batch depuis iOS Raccourcis
@@ -888,7 +889,7 @@ function App(){
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
-          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));if(d.settings.budgetMethod)setBudgetMethod(d.settings.budgetMethod);
         }
       }
       syncingRef.current=false;
@@ -910,7 +911,7 @@ function App(){
         if(d.settings){
           if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);
           if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);
-          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));
+          if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));if(d.settings.budgetMethod)setBudgetMethod(d.settings.budgetMethod);
         }
         setTimeout(function(){syncingRef.current=false;},500);
       })
@@ -1127,7 +1128,7 @@ function App(){
   });
 
   const exportJSON=()=>{const blob=new Blob([JSON.stringify({months,pots,projects,loans,categories,couple,learnedCats,settings:{annualReturn,advisorMode,profile}},null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`budget-${mk}.json`;a.click();URL.revokeObjectURL(u);};
-  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
+  const importJSON=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.months)setMonths(d.months);if(d.pots)setPots(d.pots);if(d.projects)setProjects(d.projects);if(d.loans)setLoans(d.loans);if(d.categories&&d.categories.length)setCategories(d.categories);if(d.couple)setCouple(Object.assign({},DEFAULT_COUPLE,d.couple));if(d.learnedCats)setLearnedCats(d.learnedCats);if(d.settings){if(typeof d.settings.annualReturn==="number")setAnnualReturn(d.settings.annualReturn);if(typeof d.settings.advisorMode==="boolean")setAdvisorMode(d.settings.advisorMode);if(d.settings.profile)setProfile(Object.assign({},DEFAULT_PROFILE,d.settings.profile));if(d.settings.budgetMethod)setBudgetMethod(d.settings.budgetMethod);}}catch(err){alert("Fichier invalide");}};r.readAsText(f);};
 
   if(!authReady) return el("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,var(--bg-top),var(--bg-bottom))",color:"var(--text-3)",fontSize:14}},"Chargement…");
   if(authReady&&!user&&db) return el(LoginScreen,null);
@@ -1194,8 +1195,8 @@ function App(){
 
     // ---- TAB ACCUEIL ----
     tab==="accueil" && (isWide
-      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,avgMonthlyExpenses:avgMonthlyExpenses,setTab:setTab,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})
-      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},monthName:MONTHS_FR[month]+" "+year,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})),
+      ? el(DesktopDashboard,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,loans:loans,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,data:data,categories:categories,budgetMethod:budgetMethod,onSetMethod:setBudgetMethod,avgMonthlyExpenses:avgMonthlyExpenses,setTab:setTab,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})
+      : el(DashboardScreen,{totalRevenus:totalRevenus,totalFixed:totalFixed,totalVariable:totalVariable,totalExcep:totalExcep,totalSaved:totalSaved,nonAffecte:nonAffecte,reste:reste,pots:pots,projects:projects,months:months,year:year,month:month,potBalance:potBalance,projectBalance:projectBalance,avgMonthlySavings:avgMonthlySavings,data:data,categories:categories,budgetMethod:budgetMethod,onSetMethod:setBudgetMethod,setTab:setTab,onOpenBilan:function(){setBilanYear(year);},onOpenCouple:couple.enabled?function(){setShowCouple(true);}:null,onQuickAdd:function(){setModal({kind:"quickadd",amount:0,label:""});},monthName:MONTHS_FR[month]+" "+year,victories:(data.victories||[]),onAddVictory:addVictory,onToggleVictory:toggleVictory,onDelVictory:delVictory})),
 
     // ---- TAB BUDGET ----
     tab==="budget" && (function(){
@@ -1274,7 +1275,7 @@ function App(){
 
     // ---- TAB ÉPARGNE (cagnottes) ----
     tab==="epargne" && el(EpargnePanel,{
-      pots:pots,potBalance:potBalance,avgMonthlySavings:avgMonthlySavings,
+      pots:pots,potBalance:potBalance,avgMonthlySavings:avgMonthlySavings,data:data,categories:categories,budgetMethod:budgetMethod,onSetMethod:setBudgetMethod,
       totalSaved:totalSaved,data:data,months:months,year:year,month:month,
       setModal:setModal,delDeposit:delDeposit,
       projects:projects,projectBalance:projectBalance,annualReturn:annualReturn,
@@ -4543,6 +4544,36 @@ function CoupleBalanceScreen({data,couple,monthLabel,onClose}){
         "Renseigne « à qui » sur chaque revenu et « qui a payé » sur chaque dépense (puces sous les lignes du budget). Seules les charges communes avec un payeur entrent dans le calcul ; les dépenses perso et les lignes sans payeur sont ignorées.")));
 }
 
+// ---- Ma méthode de budget (50/30/20…) ----
+function BudgetMethodCard(props){
+  var b=Core.budgetBuckets(props.data,props.categories);
+  var methods=Core.BUDGET_METHODS;
+  var m=methods[props.method]||methods["50/30/20"];
+  var rev=b.revenus||0;
+  var rows;
+  if(m.envie===0){ rows=[{label:"Dépenses",val:b.besoins+b.envies,target:m.besoin,color:"#E8743B",good:"under"},{label:"Épargne",val:b.epargne,target:m.epargne,color:"#1D8BCE",good:"over"}]; }
+  else { rows=[{label:"Besoins",val:b.besoins,target:m.besoin,color:"#E8743B",good:"under"},{label:"Envies",val:b.envies,target:m.envie,color:"#945ECF",good:"under"},{label:"Épargne",val:b.epargne,target:m.epargne,color:"#1D8BCE",good:"over"}]; }
+  var seg=function(k){ var on=props.method===k; return el("button",{key:k,onClick:function(){props.onSetMethod(k);},style:{flex:1,padding:"7px 4px",borderRadius:9,border:"none",cursor:"pointer",fontSize:12,fontWeight:on?700:600,background:on?"var(--brand-soft)":"var(--surface-2)",color:on?"var(--brand)":"var(--text-3)"}},methods[k].label); };
+  return el("div",{style:{background:"var(--surface)",borderRadius:20,padding:20,boxShadow:"var(--shadow-card)"}},
+    el("div",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:12,display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"target",size:15,color:"var(--brand)"}),"Ma méthode de budget"),
+    el("div",{style:{display:"flex",gap:6,marginBottom:10}},Object.keys(methods).map(seg)),
+    el("div",{style:{fontSize:11.5,color:"var(--text-3)",marginBottom:16,lineHeight:1.5}},m.desc),
+    rev<=0?el("div",{style:{fontSize:12.5,color:"var(--text-3)"}},"Renseigne tes revenus pour voir la répartition.")
+    :el("div",{style:{display:"flex",flexDirection:"column",gap:14}},rows.map(function(r,i){
+      var pct=rev>0?Math.round(r.val/rev*100):0;
+      var ok=r.good==="under"?(pct<=r.target):(pct>=r.target);
+      return el("div",{key:i},
+        el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}},
+          el("span",{style:{fontSize:13.5,fontWeight:700,color:"var(--text)"}},r.label),
+          el("span",{style:{fontSize:12.5}},el("strong",{style:{color:r.color}},fmt(r.val)),el("span",{style:{color:"var(--text-3)"}}," · "+pct+"% "),el("span",{style:{color:ok?"#19A979":"#E8743B",fontWeight:700}},ok?"✓":"⚠"))),
+        el("div",{style:{position:"relative",height:10,background:"var(--track)",borderRadius:6,overflow:"hidden"}},
+          el("div",{className:"bar-grow",style:{height:"100%",width:Math.min(100,pct)+"%",background:r.color,borderRadius:6}})),
+        el("div",{style:{position:"relative",height:0}},
+          el("div",{style:{position:"absolute",left:Math.min(100,r.target)+"%",top:-12,width:2,height:12,background:"var(--text)",opacity:.5},title:"objectif"})),
+        el("div",{style:{fontSize:10.5,color:"var(--text-3)",marginTop:5}},"objectif "+r.target+"%"));
+    })));
+}
+
 // ---- Mes victoires : objectifs du mois à cocher ----
 function VictoriesCard(props){
   var victories=props.victories||[];
@@ -4815,6 +4846,7 @@ function DesktopDashboard(props){
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       cagnottesCard(),loansCard(),projetsCard()),
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}),
+    props.onSetMethod&&el(BudgetMethodCard,{data:props.data,categories:props.categories,method:props.budgetMethod,onSetMethod:props.onSetMethod}),
     props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},
@@ -4898,6 +4930,7 @@ function DashboardScreen(props){
 
     // --- Prévision de trésorerie ---
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
+    props.onSetMethod&&el(BudgetMethodCard,{data:props.data,categories:props.categories,method:props.budgetMethod,onSetMethod:props.onSetMethod}),
     props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
     props.onOpenBilan&&el("button",{onClick:props.onOpenBilan,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:20,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},

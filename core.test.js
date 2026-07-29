@@ -224,5 +224,30 @@ group("Couple — équilibré = personne ne doit rien");
   eq(r.owes, null, "comptes équilibrés");
 })();
 
+// ---------- méthode de budget (buckets) ----------
+group("Répartition Besoins / Envies / Épargne");
+(function(){
+  var cats=[{id:"logement"},{id:"loisirs"},{id:"log_loyer",parent:"logement"},{id:"loi_sorties",parent:"loisirs"}];
+  var data={
+    revenus:[{amount:3000}],
+    fixed:[{amount:1000,cat:"log_loyer"}],           // besoin (parent logement)
+    variable:[{amount:300,cat:"loi_sorties"},{amount:200}], // envie + non classé(→besoin)
+    deposits:[{potId:"a",amount:400}]
+  };
+  var b=Core.budgetBuckets(data,cats);
+  eq(b.besoins, 1200, "besoins = loyer 1000 + non classé 200");
+  eq(b.envies, 300, "envies = sorties 300");
+  eq(b.epargne, 400, "épargne = versement 400");
+  eq(b.revenus, 3000, "revenus");
+})();
+
+group("catTop remonte au parent");
+(function(){
+  var cats=[{id:"alim"},{id:"alim_courses",parent:"alim"}];
+  eq(Core.catTop("alim_courses",cats), "alim", "sous-cat → parent");
+  eq(Core.catTop("alim",cats), "alim", "cat de tête → elle-même");
+  eq(Core.catTop("",cats), null, "vide → null");
+})();
+
 console.log("\n" + (failed === 0 ? "✓ TOUS LES TESTS PASSENT" : "✗ ÉCHECS") + " — " + passed + " ok, " + failed + " ko\n");
 if(typeof process !== "undefined"){ process.exit(failed === 0 ? 0 : 1); }
