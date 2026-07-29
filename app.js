@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v79";
+const APP_VERSION = "v80";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -4574,6 +4574,33 @@ function BudgetMethodCard(props){
     })));
 }
 
+// ---- Suivi des abonnements (récurrents) ----
+function SubscriptionsCard(props){
+  var data=props.data||{}, categories=props.categories||[];
+  var subs=[];
+  ["fixed","variable","excep"].forEach(function(k){
+    (data[k]||[]).forEach(function(l){
+      if(l.loanId) return;
+      if(l.recurring || Core.catTop(l.cat,categories)==="abo"){ subs.push(l); }
+    });
+  });
+  if(subs.length===0) return null;
+  subs.sort(function(a,b){return (b.amount||0)-(a.amount||0);});
+  var mens=subs.reduce(function(s,l){return s+(l.amount||0);},0);
+  return el("div",{style:{background:"var(--surface)",borderRadius:20,padding:20,boxShadow:"var(--shadow-card)"}},
+    el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}},
+      el("span",{style:{fontSize:13,fontWeight:800,color:"var(--text-2)",textTransform:"uppercase",letterSpacing:"0.4px",display:"flex",alignItems:"center",gap:8}},el(Icon,{name:"repeat",size:15,color:"#13A4B4"}),"Abonnements & récurrents"),
+      el("span",{style:{fontSize:12,color:"var(--text-3)"}},subs.length)),
+    el("div",{style:{display:"flex",gap:16,margin:"8px 0 14px"}},
+      el("div",null,el("div",{style:{fontSize:22,fontWeight:800,color:"#13A4B4",letterSpacing:"-0.5px"}},fmt(mens)),el("div",{style:{fontSize:11,color:"var(--text-3)"}},"par mois")),
+      el("div",null,el("div",{style:{fontSize:22,fontWeight:800,color:"var(--text)",letterSpacing:"-0.5px"}},fmt(mens*12)),el("div",{style:{fontSize:11,color:"var(--text-3)"}},"par an"))),
+    el("div",{style:{display:"flex",flexDirection:"column",gap:7}},subs.slice(0,8).map(function(l){
+      return el("div",{key:l.id,style:{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13.5}},
+        el("span",{style:{color:"var(--text-2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:10}},l.label||"—"),
+        el("span",{style:{fontWeight:700,color:"var(--text)",flexShrink:0}},fmt(l.amount||0)));
+    })));
+}
+
 // ---- Mes victoires : objectifs du mois à cocher ----
 function VictoriesCard(props){
   var victories=props.victories||[];
@@ -4846,6 +4873,7 @@ function DesktopDashboard(props){
     el("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,alignItems:"stretch"}},
       cagnottesCard(),loansCard(),projetsCard()),
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months)}),
+    props.data&&el(SubscriptionsCard,{data:props.data,categories:props.categories}),
     props.onSetMethod&&el(BudgetMethodCard,{data:props.data,categories:props.categories,method:props.budgetMethod,onSetMethod:props.onSetMethod}),
     props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
@@ -4930,6 +4958,7 @@ function DashboardScreen(props){
 
     // --- Prévision de trésorerie ---
     el(ForecastCard,{startBalance:totalCagnottes,monthlyNet:Core.avgMonthlyNet(months),compact:true}),
+    props.data&&el(SubscriptionsCard,{data:props.data,categories:props.categories}),
     props.onSetMethod&&el(BudgetMethodCard,{data:props.data,categories:props.categories,method:props.budgetMethod,onSetMethod:props.onSetMethod}),
     props.onAddVictory&&el(VictoriesCard,{victories:props.victories,onAdd:props.onAddVictory,onToggle:props.onToggleVictory,onDel:props.onDelVictory}),
     props.onOpenCouple&&el("button",{onClick:props.onOpenCouple,style:{border:"none",background:"var(--surface)",boxShadow:"var(--shadow-card)",borderRadius:16,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"var(--text)",textAlign:"left"}},el("span",{style:{width:40,height:40,borderRadius:11,background:"#945ECF18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},el(Icon,{name:"users",size:20,color:"#945ECF"})),el("span",{style:{flex:1}},el("span",{style:{display:"block",fontSize:15,fontWeight:700}},"Équilibre du couple"),el("span",{style:{display:"block",fontSize:12.5,color:"var(--text-3)"}},"Qui a payé quoi, qui doit combien à qui")),el(Icon,{name:"chevron-right",size:18,color:"var(--text-3)"})),
