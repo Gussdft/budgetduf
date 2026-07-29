@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v77";
+const APP_VERSION = "v78";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -2320,7 +2320,7 @@ function parseTransactions(text,learned){
   // Montant à la française : décimale VIRGULE obligatoire (les dates "08.07" utilisent le point → ignorées)
   var amtRe=/(\d{1,3}(?:[\s  .]\d{3})+|\d+),\d{2}/g;
   // dates JJ.MM / JJ/MM (+ éventuelle année)
-  var dateTok=/\b\d{2}[.\/]\d{2,4}(?:[.\/]\d{2,4})?\b/g;
+  var dateTok=/\b\d{2}[.\/]\d{2,4}(?:[.\/]\d{2,4})?\b(?!,\d)/g;
   var dateLead=/^(?:\d{2}[.\/]\d{2}(?:[.\/]\d{2,4})?\s*)+/;
   // lignes à ignorer (en-têtes, soldes, totaux, coordonnées…)
   var noise=/(ancien solde|nouveau solde|solde |solde\b|report|total|sous-total|date\b|valeur\b|libell|montant|d[ée]bit|cr[ée]dit|iban|bic|www\.|agence|t[ée]l[ée]phone|relev[ée]|n° de compte|num[ée]ro de compte)/i;
@@ -2333,7 +2333,7 @@ function parseTransactions(text,learned){
     if(!matches) continue;
     // on prend le dernier montant de la ligne (colonne de droite)
     var last=matches[matches.length-1];
-    var amt=parseFloat(last.replace(/[  . ]/g,'').replace(',','.'));
+    var amt=parseFloat(last.replace(/[^\d,]/g,'').replace(',','.'));
     if(isNaN(amt)||amt<=0||amt>1000000) continue;
     var label=clean.slice(0,clean.lastIndexOf(last));
     // Format Crédit Agricole : "Carte X6672 Monoprix Amiens" → "Monoprix Amiens"
@@ -2397,7 +2397,7 @@ function extractPdfText(file){
 // Devine la catégorie d'une opération d'après son libellé (marchands FR + relevé réel)
 var CAT_RULES=[
   // Alimentation
-  {cat:"alim_boul",kw:["boulangerie","marie blachere","gf boulangerie","patisserie","paul "]},
+  {cat:"alim_boul",kw:["boulangerie","marie blachere","gf boulangerie","patisserie"," paul "]},
   {cat:"alim_bouch",kw:["boucherie"]},
   {cat:"alim_resto",kw:["restaurant","mc donald","mcdo","mc do","burger","kfc","starbucks","subway","club sandwich","kimbo","atmosfeeric","kaffestuga","brasserie","pizz"]},
   {cat:"alim_courses",kw:["carrefour","leclerc","lidl","auchan","monoprix","franprix","intermarche","inter blanche","super u","hyper u","systeme u","casino","picard","biocoop","aldi","cora","naturalia","grand frais","jf market","mtp distri","planchon","wiotte","norma","toogoodtogo","g20","supermarch"]},
@@ -2406,7 +2406,7 @@ var CAT_RULES=[
   {cat:"log_energie",kw:["edf","electricite de france","electricité de france","engie","total energie","totalenergies","veolia","suez","saur","gaz de"]},
   {cat:"log_internet",kw:["free telecom","free mobile","freebox","free ","orange","sfr","bouygues","sosh","red by"]},
   {cat:"log_assur",kw:["maif","maaf","matmut","macif","gmf","axa","allianz","assurance"]},
-  {cat:"log_brico",kw:["leroy merlin","castorama","bricorama","brico depot","bricomarche","ikea","conforama","but "]},
+  {cat:"log_brico",kw:["leroy merlin","castorama","bricorama","brico depot","bricomarche","ikea","conforama"," but "]},
   // Transport
   {cat:"tr_train",kw:["sncf","sncf-voyageurs","sncf reseau","oui.sncf","trainline","ratp","keolis","navigo"]},
   {cat:"tr_peage",kw:["sanef","aprr","vinci autoroute","autoroute","peage","effia park","easypark","parking","q-park","indigo park"]},
