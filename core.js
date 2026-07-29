@@ -210,6 +210,42 @@
     };
   }
 
+  // Bucket « méthode de budget » d'une catégorie de tête
+  var TOP_BUCKET = {
+    alim:"besoin", logement:"besoin", transport:"besoin", sante:"besoin", enfants:"besoin",
+    loisirs:"envie", shopping:"envie", voyage:"envie", abo:"envie", autre:"besoin"
+  };
+  function catTop(catId, categories){
+    if(!catId) return null;
+    var cs = categories || [];
+    for(var i=0;i<cs.length;i++){ if(cs[i].id===catId){ return cs[i].parent || cs[i].id; } }
+    return catId;
+  }
+  // Répartit les dépenses du mois en Besoins / Envies (+ épargne = mis de côté).
+  // Les lignes non catégorisées sont comptées en Besoins (conservateur).
+  function budgetBuckets(data, categories){
+    data = data || {};
+    var mt = monthTotals(data);
+    var besoins = 0, envies = 0;
+    var cats = ["fixed","variable","excep"];
+    for(var c=0;c<cats.length;c++){
+      var arr = data[cats[c]] || [];
+      for(var j=0;j<arr.length;j++){
+        var net = lineNet(arr[j]);
+        if(net <= 0) continue;
+        var top = catTop(arr[j].cat, categories);
+        if(TOP_BUCKET[top] === "envie") envies += net; else besoins += net;
+      }
+    }
+    return { revenus:mt.revenus, depenses:mt.dep, besoins:besoins, envies:envies, epargne:mt.saved };
+  }
+  // Méthodes de budget (pourcentages cibles des revenus)
+  var BUDGET_METHODS = {
+    "50/30/20": {label:"50 / 30 / 20", besoin:50, envie:30, epargne:20, desc:"La règle classique : 50 % besoins, 30 % envies, 20 % épargne."},
+    "60/25/15": {label:"60 / 25 / 15", besoin:60, envie:25, epargne:15, desc:"Variante budgets serrés : plus de besoins, l'épargne reste."},
+    "80/20":    {label:"80 / 20",      besoin:80, envie:0,  epargne:20, desc:"Simple : 80 % pour vivre, 20 % d'épargne."}
+  };
+
   var Core = {
     sumAmounts: sumAmounts,
     potCovered: potCovered,
@@ -222,7 +258,10 @@
     forecast: forecast,
     lineNet: lineNet,
     annualSummary: annualSummary,
-    coupleBalance: coupleBalance
+    coupleBalance: coupleBalance,
+    catTop: catTop,
+    budgetBuckets: budgetBuckets,
+    BUDGET_METHODS: BUDGET_METHODS
   };
 
   if(typeof module !== "undefined" && module.exports){ module.exports = Core; }
