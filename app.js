@@ -70,7 +70,7 @@ function Icon({ name, size = 16, color = "currentColor", style }) {
 // ----------------------------------------------------------------------------
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const STORAGE_KEY = "budget-foyer-pwa-v1";
-const APP_VERSION = "v76";
+const APP_VERSION = "v77";
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
 const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -1348,7 +1348,7 @@ function App(){
 
     (modal&&modal.kind==="import") && el(ImportModal,{onClose:function(){setModal(null);},categories:categories,
       learned:learnedCats,onLearn:function(map){setLearnedCats(function(prev){return Object.assign({},prev,map);});},
-      existingLines:[].concat((data.fixed||[]).map(function(x){return {id:x.id,label:x.label,kind:"fixed"};}),(data.variable||[]).map(function(x){return {id:x.id,label:x.label,kind:"variable"};}),(data.excep||[]).map(function(x){return {id:x.id,label:x.label,kind:"excep"};})),
+      existingLines:[].concat((data.fixed||[]).map(function(x){return {id:x.id,label:x.label,amount:x.amount,kind:"fixed"};}),(data.variable||[]).map(function(x){return {id:x.id,label:x.label,amount:x.amount,kind:"variable"};}),(data.excep||[]).map(function(x){return {id:x.id,label:x.label,amount:x.amount,kind:"excep"};})),
       onApplyReel:function(map){
         setMonthData(function(c){var r=Object.assign({},c.reel||{});Object.keys(map).forEach(function(id){r[id]=(parseFloat(r[id])||0)+map[id];});return Object.assign({},c,{reel:r});});
         setShowPrevus(true);
@@ -2318,9 +2318,9 @@ function parseTransactions(text,learned){
   var lines=(text||"").split('\n');
   var results=[];
   // Montant à la française : décimale VIRGULE obligatoire (les dates "08.07" utilisent le point → ignorées)
-  var amtRe=/(\d[\d  . ]*,\d{2})/g;
+  var amtRe=/(\d{1,3}(?:[\s  .]\d{3})+|\d+),\d{2}/g;
   // dates JJ.MM / JJ/MM (+ éventuelle année)
-  var dateTok=/\b\d{2}[.\/]\d{2}(?:[.\/]\d{2,4})?\b/g;
+  var dateTok=/\b\d{2}[.\/]\d{2,4}(?:[.\/]\d{2,4})?\b/g;
   var dateLead=/^(?:\d{2}[.\/]\d{2}(?:[.\/]\d{2,4})?\s*)+/;
   // lignes à ignorer (en-têtes, soldes, totaux, coordonnées…)
   var noise=/(ancien solde|nouveau solde|solde |solde\b|report|total|sous-total|date\b|valeur\b|libell|montant|d[ée]bit|cr[ée]dit|iban|bic|www\.|agence|t[ée]l[ée]phone|relev[ée]|n° de compte|num[ée]ro de compte)/i;
@@ -2337,7 +2337,7 @@ function parseTransactions(text,learned){
     if(isNaN(amt)||amt<=0||amt>1000000) continue;
     var label=clean.slice(0,clean.lastIndexOf(last));
     // Format Crédit Agricole : "Carte X6672 Monoprix Amiens" → "Monoprix Amiens"
-    label=label.replace(/^\s*(carte|virement|avoir|prlv|pr[ée]l[èe]vement|ch[èe]que|retrait|paiement|vir)\b\s*/i,'');
+    label=label.replace(/^\s*(?:(?:carte|virement|avoir|prlv|pr[ée]l[èe]vement|ch[èe]que|retrait|paiement|vir)\b\s*)+/i,'');
     label=label.replace(/\bX\d{3,}\b/gi,' ');    // masque de carte
     label=label.replace(/\bweb\b|\bvir inst de\b|\bde m\.?\b|\bde madame\b/gi,' ');
     label=label.replace(/\*+\d*\*?/g,' ');       // refs type **4074*
@@ -2348,8 +2348,10 @@ function parseTransactions(text,learned){
     if(/^[\d\s.,\/-]+$/.test(label)) continue;    // que des chiffres/dates
     // Capitalisation douce (les relevés sont souvent tout en majuscules)
     var pretty=label.toLowerCase().replace(/(^|\s)([a-zàâäéèêëîïôöùûüç])/g,function(m,p,c){return p+c.toUpperCase();});
-    var gcat=guessCategory(pretty,learned);
-    results.push({id:uid(),label:pretty,amount:amt,cat:gcat||"",kind:guessKind(gcat),checked:true});
+    // Revenu ou dépense ? (marqueurs de virement reçu / salaire)
+    var isIncome=/\b(salaire|r[ée]mun[ée]ration|paye|ddfip|caf\b|p[ôo]le emploi|allocation|remboursement|virement\s+de\b|vir\s+inst\s+de|avoir\b)/i.test(raw);
+    var gcat=isIncome?"":guessCategory(pretty,learned);
+    results.push({id:uid(),label:pretty,amount:amt,cat:gcat||"",kind:isIncome?"revenus":guessKind(gcat),type:isIncome?"in":"out",checked:true});
   }
   return results;
 }
@@ -2380,7 +2382,7 @@ function extractPdfText(file){
       return acc.then(function(txt){
         return pdf.getPage(n).then(function(page){ return page.getTextContent(); }).then(function(tc){
           var rows={};
-          tc.items.forEach(function(it){ var y=Math.round(it.transform[5]); if(!rows[y])rows[y]=[]; rows[y].push(it); });
+          tc.items.forEach(function(it){ var y=Math.round(it.transform[5]/2)*2; if(!rows[y])rows[y]=[]; rows[y].push(it); }); // tolérance ~2px : libellé + montant d'une même ligne se regroupent
           Object.keys(rows).map(Number).sort(function(a,b){return b-a;}).forEach(function(y){
             var line=rows[y].sort(function(a,b){return a.transform[4]-b.transform[4];}).map(function(i){return i.str;}).join(" ");
             txt+=line+"\n";
@@ -2479,9 +2481,10 @@ function ImportModal(props){
   var [text,setText]=useState(initText);
   var [mode,setMode]=useState(lines.length>0?"reel":"add"); // reel = comparer au prévu, add = nouvelles dépenses
   var [pdfBusy,setPdfBusy]=useState(false);
-  var enrich=function(list){ return list.map(function(t){var m=bestLineMatch(t.label,lines);return Object.assign({},t,{matchId:m?m.id:""});}); };
+  var existKeys={}; lines.forEach(function(l){ existKeys[normLabel(l.label)+"|"+(l.amount||0)]=true; });
+  var enrich=function(list){ return list.map(function(t){var m=bestLineMatch(t.label,lines);var dup=!!existKeys[normLabel(t.label)+"|"+t.amount];return Object.assign({},t,{matchId:m?m.id:"",dup:dup,checked:t.checked&&!dup});}); };
   var [txs,setTxs]=useState(function(){ return initText?enrich(parseTransactions(initText,learned)):[]; });
-  var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"]];
+  var cats=[["variable","Variable","#F2B53C"],["fixed","Fixe","#E8743B"],["excep","Except.","#945ECF"],["revenus","Revenu","#19A979"]];
   function learnFrom(list){ if(!onLearn)return; var map={}; list.forEach(function(t){ if(t.cat){ var k=merchantKey(t.label); if(k) map[k]=t.cat; } }); if(Object.keys(map).length) onLearn(map); }
 
   function parse(){
@@ -2549,8 +2552,11 @@ function ImportModal(props){
         return el("div",{key:t.id,style:{background:t.checked?"var(--surface)":"var(--surface-2)",borderRadius:12,padding:"10px 12px",border:"1px solid "+(t.checked?(mode==="reel"&&!t.matchId?"var(--border-3)":"var(--border)"):"var(--border-2)"),opacity:t.checked?1:0.5}},
           el("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:t.checked?8:0}},
             el("input",{type:"checkbox",checked:t.checked,onChange:function(){toggle(t.id);},style:{width:18,height:18,cursor:"pointer",flexShrink:0}}),
-            el("span",{style:{flex:1,fontSize:14,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},t.label),
-            el("span",{style:{fontSize:14,fontWeight:800,color:"var(--text)",whiteSpace:"nowrap"}},fmt(t.amount))),
+            el("span",{style:{flex:1,fontSize:14,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}},
+              t.type==="in"&&el("span",{style:{fontSize:9.5,fontWeight:700,color:"#19A979",background:"#19A97918",borderRadius:5,padding:"1px 5px",flexShrink:0}},"revenu"),
+              t.dup&&el("span",{style:{fontSize:9.5,fontWeight:700,color:"#E8743B",background:"#E8743B18",borderRadius:5,padding:"1px 5px",flexShrink:0}},"déjà présent"),
+              el("span",{style:{overflow:"hidden",textOverflow:"ellipsis"}},t.label)),
+            el("span",{style:{fontSize:14,fontWeight:800,color:t.type==="in"?"#19A979":"var(--text)",whiteSpace:"nowrap"}},(t.type==="in"?"+ ":"")+fmt(t.amount))),
           t.checked&&mode==="add"&&el("div",{style:{display:"flex",alignItems:"center",gap:8,paddingLeft:28}},
             (function(){var c=catById(t.cat);return el("span",{style:{width:9,height:9,borderRadius:3,flexShrink:0,background:c?c.color:"var(--border-3)"}});})(),
             el("select",{value:t.cat||"",onChange:function(e){setCatK(t.id,e.target.value);},style:{flex:1,minWidth:0,padding:"6px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--field-bg)",color:"var(--text)",fontSize:12.5}},
